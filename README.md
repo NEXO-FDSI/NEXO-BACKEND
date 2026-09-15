@@ -1,83 +1,159 @@
 # NEXO — Backend
 
-Prototipo de **enriquecimiento de indicadores de compromiso (IoC) mediante IA**, que los relaciona de forma trazable con el marco MITRE ATT&CK y genera informes auditables para un analista de seguridad (SOC nivel 1/2).
+Prototype for **AI-driven enrichment of indicators of compromise (IoCs)**, linking them traceably to the MITRE ATT&CK framework and generating auditable reports for a security analyst (SOC tier 1/2).
 
-Proyecto del curso **Seminario de Seguridad de la Información 2026-2** — Escuela Colombiana de Ingeniería Julio Garavito.
+Course project for **Seminario de Seguridad de la Información 2026-2** — Escuela Colombiana de Ingeniería Julio Garavito.
 
-> Repo hermano: [`nexo-intel-frontend`](https://github.com/NEXO-FDSI/NEXO-FRONTEND.git) — interfaz web que consume esta API. Se ejecutan por separado, no como monorepo.
+> Sibling repo: [`nexo-intel-frontend`](https://github.com/NEXO-FDSI/NEXO-FRONTEND.git) — the web interface that consumes this API. They run separately, not as a monorepo.
 
-## Contexto académico
+## Academic context
 
 | | |
 |---|---|
-| Asignatura | Fundamentos de Seguridad de la Información |
-| Grupo | Grupo 2 |
-| Profesor | Diego Alexander López Correa |
-| Integrantes | Daniel Alexander Ahumada León · Daniel Ricardo Ruge Gómez · David Alejandro Patacón Henao · David Santiago Cajamarca Cadena |
+| Course | Fundamentos de Seguridad de la Información |
+| Group | Group 2 |
+| Professor | Diego Alexander López Correa |
+| Members | Daniel Alexander Ahumada León · Daniel Ricardo Ruge Gómez · David Alejandro Patacón Henao · David Santiago Cajamarca Cadena |
 
-## Arquitectura
+## Architecture
 
-El backend implementa las tres capas descritas en la propuesta del proyecto:
+The backend implements the three layers described in the project proposal:
 
-- **Capa de interfaz** — API construida con FastAPI, expone los endpoints que consume el frontend y registra las decisiones de validación humana.
-- **Capa de procesamiento** — seis módulos encadenados: `ingestion → normalization → enrichment → correlation → ai_component → reporting`.
-- **Capa de persistencia** — SQLite, almacena indicadores, resultados de correlación, informes y caché de respuestas de fuentes externas.
+- **Interface layer** — API built with FastAPI; exposes the endpoints the frontend consumes and records human validation decisions.
+- **Processing layer** — six chained modules: `ingestion → normalization → enrichment → correlation → ai_component → reporting`.
+- **Persistence layer** — PostgreSQL (Supabase), schema versioned with Alembic; stores indicators, correlation results, reports and a cache of external source responses.
 
-La correlación con MITRE ATT&CK sigue una cadena de dos etapas deliberadamente separadas:
+MITRE ATT&CK correlation follows a deliberately two-stage chain:
 
-1. **Resolución de entidad** — ¿el indicador puede vincularse a una entidad conocida (malware, campaña, grupo)?
-2. **Recuperación de técnicas** — solo si (1) tuvo éxito, se recuperan las técnicas ATT&CK documentadas para esa entidad.
+1. **Entity resolution** — can the indicator be linked to a known entity (malware, campaign, group)?
+2. **Technique retrieval** — only if (1) succeeded, the ATT&CK techniques documented for that entity are retrieved.
 
-Si la etapa 1 no alcanza evidencia suficiente, el pipeline corta ahí y declara explícitamente la ausencia de asociación — nunca fuerza una técnica sin sustento.
+If stage 1 does not reach sufficient evidence, the pipeline stops there and explicitly declares the absence of an association — it never forces an unsupported technique.
 
-## Estructura del proyecto
+## Data model
+
+```mermaid
+erDiagram
+    indicators ||--o{ enrichment_cache : "caches responses for"
+    indicators ||--o{ indicator_entity_link : "stage (a)"
+    entities   ||--o{ indicator_entity_link : "stage (a)"
+    entities   ||--o{ entity_technique_link : "stage (b)"
+    techniques ||--o{ entity_technique_link : "stage (b)"
+    indicators ||--o{ reports : "generates"
+    reports    ||--o{ human_validation : "is validated by"
+
+    indicators {
+        int id PK
+        string tipo "ip / domain / hash / url"
+        string valor UK
+        string fuente
+        timestamptz timestamp_ingesta
+    }
+    enrichment_cache {
+        int id PK
+        int indicator_id FK
+        string fuente_api
+        text respuesta_json
+        timestamptz timestamp
+    }
+    entities {
+        int id PK
+        string nombre
+        string tipo "malware / group / campaign / tool"
+    }
+    indicator_entity_link {
+        int id PK
+        int indicator_id FK
+        int entity_id FK
+        text evidencia
+        float confianza "0.0 - 1.0"
+    }
+    techniques {
+        string id PK "official MITRE id, e.g. T1566"
+        string nombre
+        string tactica
+    }
+    entity_technique_link {
+        int id PK
+        int entity_id FK
+        string technique_id FK
+        string fuente_attck
+    }
+    reports {
+        int id PK
+        int indicator_id FK
+        text contenido
+        float nivel_confianza
+        timestamptz timestamp
+    }
+    human_validation {
+        int id PK
+        int report_id FK
+        string decision "aceptado / rechazado"
+        string analista
+        timestamptz timestamp
+    }
+```
+
+Column names are kept in Spanish because they are the actual database columns.
+
+The two link tables mirror the two-stage chain: `indicator_entity_link` records the
+**entity resolution** along with its evidence and confidence level, and
+`entity_technique_link` is only populated if that resolution succeeded, tracing the
+**technique retrieval** back to its ATT&CK source.
+
+The schema is managed with Alembic (`alembic/versions/`), never with `create_all()`.
+
+## Project structure
 
 ```
 app/
-├── ingestion/       # captura y validación de indicadores de entrada
-├── normalization/   # limpieza, dedup, estandarización
-├── enrichment/       # consultas a APIs de reputación
-├── correlation/     # resolución de entidad + recuperación de técnicas ATT&CK
-├── ai_component/    # LLM + RAG sobre la base de conocimiento ATT&CK
-├── reporting/        # generación del informe contextualizado
-├── api/              # endpoints FastAPI
-└── db/                # modelos y acceso a SQLite
+├── ingestion/       # capture and validation of incoming indicators
+├── normalization/   # cleanup, dedup, standardization
+├── enrichment/       # queries to reputation APIs
+├── correlation/     # entity resolution + ATT&CK technique retrieval
+├── ai_component/    # LLM + RAG over the ATT&CK knowledge base
+├── reporting/        # contextualized report generation
+├── api/              # FastAPI endpoints
+└── db/                # SQLAlchemy models and PostgreSQL access
 data/
-├── attck/            # dataset STIX/JSON oficial de MITRE ATT&CK
-└── test_dataset/     # indicadores curados para los 6 escenarios de prueba
+├── attck/            # official MITRE ATT&CK STIX/JSON dataset
+└── test_dataset/     # curated indicators for the 6 test scenarios
 tests/
 ```
 
-## Requisitos previos
+## Prerequisites
 
-- Python 3.14 (última versión estable)
-- Docker (opcional para desarrollo local, requerido para la demo final)
+- Python 3.14 (latest stable release)
+- Docker (optional for local development, required for the final demo)
 
-## Instalación
+## Installation
 
 ```bash
 python3.14 -m venv .venv
-source .venv/bin/activate.fish   # fish shell; usa activate si estás en bash/zsh
+source .venv/bin/activate.fish   # fish shell; use activate on bash/zsh
 pip install -r requirements.txt
 cp .env.example .env
+# fill in DATABASE_URL in .env with the Supabase connection string
+alembic upgrade head   # creates the tables
 ```
 
-## Variables de entorno
+## Environment variables
 
-| Variable | Descripción |
+| Variable | Description |
 |---|---|
-| `LLM_API_KEY` | Credencial del modelo de lenguaje usado en el componente de IA |
-| `REPUTATION_API_KEY` | Credencial del servicio de reputación de IoCs (enriquecimiento) |
-| `DB_PATH` | Ruta del archivo SQLite (default `./data/app.db`) |
-| `CORS_ORIGINS` | Orígenes permitidos para el frontend, separados por coma |
+| `LLM_API_KEY` | Credential for the language model used by the AI component |
+| `REPUTATION_API_KEY` | Credential for the IoC reputation service (enrichment) |
+| `DATABASE_URL` | PostgreSQL connection string on Supabase (`postgresql+psycopg://user:password@host:5432/dbname`) |
+| `CORS_ORIGINS` | Allowed frontend origins, comma-separated |
 
-## Ejecución en desarrollo
+## Running in development
 
 ```bash
 uvicorn app.main:app --reload --port 8000
 ```
 
-Verificación rápida:
+Quick check:
 ```bash
 curl http://localhost:8000/health
 # {"status": "ok"}
