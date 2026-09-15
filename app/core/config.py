@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     DATABASE_URL: str
+    TEST_DATABASE_URL: str = ""  # Postgres efímero en Docker; solo para tests
     LLM_API_KEY: str = ""
     REPUTATION_API_KEY: str = ""
     CORS_ORIGINS: str = ""
