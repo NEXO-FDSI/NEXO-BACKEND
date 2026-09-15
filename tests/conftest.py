@@ -1,10 +1,12 @@
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.db.database import Base
+from app.db.database import Base, get_db
+from app.main import app as fastapi_app
 from app.db import models  # noqa: F401  — puebla Base.metadata con las 8 tablas
 
 
@@ -41,10 +43,20 @@ def db(engine):
     """Session limpia por test: transacción externa + rollback, sin recrear tablas."""
     conn = engine.connect()
     trans = conn.begin()
-    session = Session(bind=conn)
+    # create_savepoint: el commit() del endpoint libera un SAVEPOINT en vez de cerrar la
+    # transacción externa, así el rollback del teardown sigue deshaciéndolo todo.
+    session = Session(bind=conn, join_transaction_mode="create_savepoint")
     try:
         yield session
     finally:
         session.close()
         trans.rollback()
         conn.close()
+
+
+@pytest.fixture
+def client(db):
+    """TestClient con get_db apuntando a la sesión de test, no a Supabase."""
+    fastapi_app.dependency_overrides[get_db] = lambda: db
+    yield TestClient(fastapi_app)
+    fastapi_app.dependency_overrides.clear()
