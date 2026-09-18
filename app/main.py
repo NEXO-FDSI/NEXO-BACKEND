@@ -1,10 +1,21 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import enrichment, indicators
+from app.api import correlation, enrichment, indicators
+from app.correlation.attck_loader import load_attck_index
 from app.core.config import settings
 
-app = FastAPI(title="NEXO Intel API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # El bundle STIX se parsea una sola vez por proceso, nunca por request.
+    app.state.attck_index = load_attck_index(settings.ATTCK_STIX_PATH)
+    yield
+
+
+app = FastAPI(title="NEXO Intel API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -16,6 +27,7 @@ app.add_middleware(
 
 app.include_router(indicators.router)
 app.include_router(enrichment.router)
+app.include_router(correlation.router)
 
 
 @app.get("/health")

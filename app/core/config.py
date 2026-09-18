@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     LLM_API_KEY: str = ""
     REPUTATION_API_KEY: str = ""
     CORS_ORIGINS: str = ""
+    ATTCK_STIX_PATH: str = "data/attck/enterprise-attack-19.1.json"
 
     @property
     def cors_origins(self) -> list[str]:
