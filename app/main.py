@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import correlation, enrichment, indicators
+from app.api import correlation, enrichment, indicators, reports
 from app.correlation.attck_loader import load_attck_index
 from app.core.config import settings
 
@@ -28,6 +28,7 @@ app.add_middleware(
 app.include_router(indicators.router)
 app.include_router(enrichment.router)
 app.include_router(correlation.router)
+app.include_router(reports.router)
 
 
 @app.get("/health")
