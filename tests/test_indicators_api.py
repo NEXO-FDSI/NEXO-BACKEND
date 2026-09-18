@@ -62,3 +62,45 @@ def test_valor_duplicado_es_409(client, db):
 
 def test_health_sigue_igual(client):
     assert client.get("/health").json() == {"status": "ok"}
+
+
+# --- Etapa 4: normalización y deduplicación lógica ---
+
+
+def test_url_se_persiste_canonica(client, db):
+    r = _post(client, "url", "http://Example.COM/Path")
+
+    assert r.status_code == 201
+    assert r.json()["valor"] == "http://example.com/Path"
+    assert indicator_repository.get(db, r.json()["id"]).valor == "http://example.com/Path"
+
+
+def test_url_defangeada_equivalente_es_409(client):
+    assert _post(client, "url", "http://Example.COM/Path").status_code == 201
+
+    r = _post(client, "url", "hxxp://EXAMPLE[.]com/Path")
+    assert r.status_code == 409
+    assert r.json()["detail"] == "El indicador ya existe"
+
+
+def test_dominio_defangeado_y_trailing_dot_colapsan(client, db):
+    primero = _post(client, "domain", "EXAMPLE[.]COM")
+    assert primero.status_code == 201
+    assert primero.json()["valor"] == "example.com"
+
+    assert _post(client, "domain", "example.com.").status_code == 409
+    assert len([i for i in indicator_repository.list(db) if i.valor == "example.com"]) == 1
+
+
+def test_ipv6_se_persiste_comprimida(client, db):
+    r = _post(client, "ip", "2001:0DB8:0000:0000:0000:0000:0000:0001")
+
+    assert r.status_code == 201
+    assert r.json()["valor"] == "2001:db8::1"
+    assert indicator_repository.get(db, r.json()["id"]).valor == "2001:db8::1"
+
+
+def test_invalido_sigue_siendo_422_tras_normalizar(client):
+    """La normalización no puede convertir un 422 en un 500."""
+    for tipo, valor in [("ip", "no-es-una-ip"), ("url", "hxxp[:]//"), ("domain", "-mal.com")]:
+        assert _post(client, tipo, valor).status_code == 422
