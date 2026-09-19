@@ -1,10 +1,15 @@
-"""Plantilla fija del informe (Etapa 7). La Etapa 8 reemplaza la redacción, no la estructura."""
+"""Plantilla fija del informe. La Etapa 8 agrega la sección de análisis narrativo."""
 
 from datetime import datetime, timezone
 
 from app.db.models import Indicator
 
 FUENTE_TECNICAS = 'MITRE ATT&CK STIX dataset — relationship "uses"'
+ANALISIS_NO_DISPONIBLE = (
+    "> Análisis narrativo no disponible. La información estructurada de\n"
+    "> este informe (entidad, confianza, técnicas) es válida\n"
+    "> independientemente de este apartado."
+)
 
 
 def nivel_confianza(correlation_result: dict) -> float:
@@ -13,7 +18,10 @@ def nivel_confianza(correlation_result: dict) -> float:
 
 
 def build_report_content(
-    indicator: Indicator, enrichment_detalle: dict, correlation_result: dict
+    indicator: Indicator,
+    enrichment_detalle: dict,
+    correlation_result: dict,
+    analysis_text: str | None = None,
 ) -> str:
     pulses = (enrichment_detalle.get("pulse_info") or {}).get("count") or 0
     lineas = [
@@ -55,5 +63,8 @@ def build_report_content(
             "> asociación es un resultado válido, no un error del sistema.",
         ]
 
+    # La sección existe siempre: si el análisis no está, se dice por qué en vez de
+    # dejar un hueco que parezca un error de generación.
+    lineas += ["", "## Análisis", "", analysis_text or ANALISIS_NO_DISPONIBLE]
     lineas += ["", "## Estado de validación", "", "Pendiente de revisión humana.", ""]
     return "\n".join(lineas)

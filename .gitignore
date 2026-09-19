@@ -4,3 +4,4 @@ __pycache__/
 .env
 data/attck/*.json
 .pytest_cache/
+data/chroma/

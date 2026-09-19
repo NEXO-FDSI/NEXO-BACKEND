@@ -1,9 +1,10 @@
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.ai_component.vectorstore import VectorStore
 from app.api.correlation import get_attck_index
 from app.correlation.attck_loader import AttckIndex
 from app.db.database import get_db
@@ -15,6 +16,11 @@ from app.schemas.indicator import IndicatorCreate, IndicatorRead
 from app.schemas.report import ReportRead
 
 router = APIRouter(tags=["indicators"])
+
+
+def get_vector_store(request: Request) -> VectorStore:
+    """Store abierto una sola vez en el lifespan, igual que el índice ATT&CK."""
+    return request.app.state.vector_store
 
 
 @router.post("/indicators", status_code=status.HTTP_201_CREATED, response_model=IndicatorRead)
@@ -42,6 +48,7 @@ def create_report(
     indicator_id: int,
     db: Session = Depends(get_db),
     index: AttckIndex = Depends(get_attck_index),
+    vector_store: VectorStore = Depends(get_vector_store),
 ):
     indicator = indicator_repository.get(db, indicator_id)
     if indicator is None:
@@ -56,6 +63,8 @@ def create_report(
             detail="Debes ejecutar /enrich para este indicador antes de generar el informe",
         )
 
-    report = generate_report(db, indicator, json.loads(cacheado.respuesta_json), index)
+    report = generate_report(
+        db, indicator, json.loads(cacheado.respuesta_json), index, vector_store
+    )
     db.commit()
     return report

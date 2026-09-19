@@ -1,4 +1,4 @@
-"""Etapa 7: informe con plantilla fija + validación humana. Usa el AttckIndex del conftest."""
+"""Etapa 7: informe con plantilla fija + validación humana. Usa los dobles del conftest."""
 
 import json
 
@@ -73,7 +73,18 @@ def test_nivel_confianza():
 # --- flujo completo indicador → informe → validación ---
 
 
-def test_flujo_completo(client, db):
+def test_flujo_completo(client, db, vector_store, monkeypatch):
+    # Etapa 8: el store trae texto para las técnicas y el LLM está mockeado. Con esto el
+    # informe debe salir con su sección de análisis narrativo.
+    vector_store.documentos = {
+        "T9001": {"document": "Falsa Uno (Initial Access)\n\nAdjuntos maliciosos.",
+                  "metadata": {"nombre": "Falsa Uno", "tactica": "Initial Access"}},
+        "T9002": {"document": "Falsa Dos (Execution)\n\nIntérpretes de comandos.",
+                  "metadata": {"nombre": "Falsa Dos", "tactica": "Execution"}},
+    }
+    monkeypatch.setattr("app.ai_component.service.generate_analysis",
+                        lambda prompt: "Emotet se asocia por su familia de malware.")
+
     r = client.post("/indicators", json={"tipo": "ip", "valor": "20.0.0.1"})
     assert r.status_code == 201
     ind_id = r.json()["id"]
@@ -84,6 +95,7 @@ def test_flujo_completo(client, db):
     informe = r.json()
     assert informe["indicator_id"] == ind_id and informe["nivel_confianza"] == 0.9
     assert "emotet" in informe["contenido"] and "T9001" in informe["contenido"]
+    assert "## Análisis\n\nEmotet se asocia por su familia de malware." in informe["contenido"]
 
     r = client.post(f"/reports/{informe['id']}/validate",
                     json={"decision": "aceptado", "analista": "analista de prueba"})
@@ -98,12 +110,14 @@ def test_flujo_completo(client, db):
     assert validaciones[0].decision == "aceptado" and validaciones[0].analista == "analista de prueba"
 
 
-def test_informe_sin_evidencia_tiene_confianza_cero(client, db):
+def test_informe_sin_evidencia_tiene_confianza_cero(client, db, vector_store):
     ind = _indicador(db, "20.0.0.2")
     _cachear(db, ind, {"pulse_info": {"count": 0, "pulses": []}})
     r = client.post(f"/indicators/{ind.id}/report")
     assert r.status_code == 201
     assert r.json()["nivel_confianza"] == 0.0 and "Sin evidencia suficiente" in r.json()["contenido"]
+    # Sin entidad resuelta no se consulta el vector store ni el LLM.
+    assert vector_store.llamadas == []
 
 
 def test_report_400_sin_enriquecimiento(client, db):

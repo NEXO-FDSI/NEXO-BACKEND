@@ -5,6 +5,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app.api.correlation import get_attck_index
+from app.api.indicators import get_vector_store
 from app.core.config import settings
 from app.correlation.attck_loader import AttckIndex
 from app.db.database import Base, get_db
@@ -76,14 +77,48 @@ def attck_index() -> AttckIndex:
     )
 
 
+class FakeVectorStore:
+    """Doble del vector store. Registra las llamadas para poder afirmar que NO ocurrieron."""
+
+    def __init__(self, documentos: dict[str, dict] | None = None):
+        self.documentos = documentos or {}
+        self.llamadas: list[list[str]] = []
+
+    def upsert(self, *args, **kwargs):
+        raise AssertionError("los tests no siembran embeddings")
+
+    def get_by_ids(self, ids: list[str]) -> dict[str, dict]:
+        self.llamadas.append(ids)
+        return {i: self.documentos[i] for i in ids if i in self.documentos}
+
+
 @pytest.fixture
-def client(db, attck_index):
-    """TestClient con get_db y get_attck_index apuntando a los dobles de test.
+def vector_store() -> FakeVectorStore:
+    """Vacío por defecto: así ningún test dispara el LLM sin pedirlo explícitamente."""
+    return FakeVectorStore()
+
+
+@pytest.fixture(autouse=True)
+def sin_llm_real(monkeypatch):
+    """Garantía estructural de que ninguna prueba llegue a Ollama.
+
+    Los tests que sí necesitan una respuesta vuelven a parchear generate_analysis.
+    """
+    def _prohibido(prompt: str) -> str:
+        raise AssertionError("un test intentó llamar al LLM real")
+
+    monkeypatch.setattr("app.ai_component.service.generate_analysis", _prohibido)
+
+
+@pytest.fixture
+def client(db, attck_index, vector_store):
+    """TestClient con get_db, get_attck_index y get_vector_store apuntando a los dobles.
 
     El lifespan no corre (TestClient no se usa como context manager), así que
-    app.state.attck_index no existe: por eso se sobrescribe la dependencia.
+    app.state.attck_index no existe: por eso se sobrescriben las dependencias.
     """
     fastapi_app.dependency_overrides[get_db] = lambda: db
     fastapi_app.dependency_overrides[get_attck_index] = lambda: attck_index
+    fastapi_app.dependency_overrides[get_vector_store] = lambda: vector_store
     yield TestClient(fastapi_app)
     fastapi_app.dependency_overrides.clear()

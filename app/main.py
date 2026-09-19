@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.ai_component.vectorstore import ChromaVectorStore
 from app.api import correlation, enrichment, indicators, reports
 from app.correlation.attck_loader import load_attck_index
 from app.core.config import settings
@@ -12,6 +13,7 @@ from app.core.config import settings
 async def lifespan(app: FastAPI):
     # El bundle STIX se parsea una sola vez por proceso, nunca por request.
     app.state.attck_index = load_attck_index(settings.ATTCK_STIX_PATH)
+    app.state.vector_store = ChromaVectorStore()
     yield
 
 
