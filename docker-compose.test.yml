@@ -1,4 +1,6 @@
 # Postgres efímero solo para tests. Nunca apunta a Supabase.
+# Proyecto propio: así no comparte red ni 'orphans' con el docker-compose.yml del backend.
+name: nexo-intel-backend-test
 services:
   postgres-test:
     image: postgres:16

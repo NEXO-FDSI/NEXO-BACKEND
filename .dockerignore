@@ -1,0 +1,8 @@
+# Secretos: se inyectan en tiempo de ejecución (env_file), nunca dentro de la imagen.
+.env
+.venv/
+.git/
+**/__pycache__/
+.pytest_cache/
+# Vector store: se monta como volumen desde el host (docker-compose.yml).
+data/chroma/

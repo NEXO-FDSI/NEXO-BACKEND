@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +20,15 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "qwen3:8b"
     EMBEDDING_MODEL: str = "nomic-embed-text"
     CHROMA_PERSIST_DIR: str = "./data/chroma"
+
+    @field_validator("CORS_ORIGINS")
+    @classmethod
+    def _sin_comodin(cls, v: str) -> str:
+        # Con allow_credentials=True un "*" dejaría a cualquier sitio llamar a la API con
+        # las cookies del usuario. Se falla al arrancar, no en silencio.
+        if "*" in (o.strip() for o in v.split(",")):
+            raise ValueError("CORS_ORIGINS no admite '*': lista los orígenes explícitos")
+        return v
 
     @property
     def cors_origins(self) -> list[str]:

@@ -10,7 +10,7 @@ from app.db.repositories import indicator_repository
 from app.db.repositories.enrichment_cache import get_by_indicator_and_source
 from app.enrichment.service import FUENTE
 
-router = APIRouter(tags=["correlation"])
+router = APIRouter(tags=["Correlation"])
 
 
 def get_attck_index(request: Request) -> AttckIndex:
@@ -18,7 +18,17 @@ def get_attck_index(request: Request) -> AttckIndex:
     return request.app.state.attck_index
 
 
-@router.post("/indicators/{indicator_id}/correlate")
+@router.post(
+    "/indicators/{indicator_id}/correlate",
+    summary="Correlacionar un indicador con MITRE ATT&CK",
+    description=(
+        "Cadena de dos etapas: (a) resuelve una entidad conocida (malware, grupo, "
+        "herramienta, campaña) a partir de la evidencia de OTX; (b) solo si (a) resolvió, "
+        "recupera las técnicas que ATT&CK documenta para esa entidad. Sin evidencia "
+        "suficiente devuelve `resuelto: false` y ninguna técnica. **Requiere haber "
+        "ejecutado `/enrich` antes** (**400** si no); **404** si el indicador no existe."
+    ),
+)
 def correlate(
     indicator_id: int,
     db: Session = Depends(get_db),

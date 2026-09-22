@@ -15,7 +15,8 @@ from app.reporting.service import generate_report
 from app.schemas.indicator import IndicatorCreate, IndicatorRead
 from app.schemas.report import ReportRead
 
-router = APIRouter(tags=["indicators"])
+# Tags por endpoint y no en el router: FastAPI los concatena, y el informe va en Reports.
+router = APIRouter()
 
 
 def get_vector_store(request: Request) -> VectorStore:
@@ -23,7 +24,18 @@ def get_vector_store(request: Request) -> VectorStore:
     return request.app.state.vector_store
 
 
-@router.post("/indicators", status_code=status.HTTP_201_CREATED, response_model=IndicatorRead)
+@router.post(
+    "/indicators",
+    status_code=status.HTTP_201_CREATED,
+    response_model=IndicatorRead,
+    tags=["Indicators"],
+    summary="Registrar un indicador",
+    description=(
+        "Normaliza (refang, minúsculas, forma canónica) y valida el indicador según su "
+        "`tipo` (`ip`, `domain`, `hash`, `url`) y lo persiste. **422** si el formato no "
+        "corresponde al tipo; **409** si el valor canónico ya estaba registrado."
+    ),
+)
 def create_indicator(payload: IndicatorCreate, db: Session = Depends(get_db)):
     """El formato ya lo validó IndicatorCreate (422). Aquí solo se persiste."""
     try:
@@ -43,6 +55,15 @@ def create_indicator(payload: IndicatorCreate, db: Session = Depends(get_db)):
     "/indicators/{indicator_id}/report",
     status_code=status.HTTP_201_CREATED,
     response_model=ReportRead,
+    tags=["Reports"],
+    summary="Generar el informe de un indicador",
+    description=(
+        "Correlaciona (idempotente) y redacta el informe: enriquecimiento, entidad, técnicas "
+        "ATT&CK y un análisis narrativo del LLM basado solo en el texto oficial de esas "
+        "técnicas. Si no hubo entidad o el LLM falla, el informe se genera igual sin ese "
+        "apartado. **Requiere haber ejecutado `/enrich` antes** (**400** si no); **404** si "
+        "el indicador no existe."
+    ),
 )
 def create_report(
     indicator_id: int,

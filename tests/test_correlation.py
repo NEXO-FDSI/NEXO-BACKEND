@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from app.correlation.service import (
+    MAX_INDICADORES_PULSE,
     correlate_indicator,
     resolve_entity_from_enrichment,
     retrieve_techniques_for_entity,
@@ -99,6 +100,51 @@ def test_alias_resuelve_al_canonico(attck_index):
 def test_nombre_ambiguo_deja_constancia_en_la_evidencia(attck_index):
     r = resolve_entity_from_enrichment(_detalle(familias=["Ambigua"]), attck_index)
     assert "ambiguo" in r["evidencia"] and "grupo, malware" in r["evidencia"]
+
+
+# --- robustez frente a pulses agregados (hallazgo de la Etapa 9 con datos reales) ---
+
+
+def _pulses(*pulses):
+    """pulses: tuplas (familias, tags, indicator_count)."""
+    return {"pulse_info": {"count": len(pulses), "pulses": [
+        {"name": "x", "malware_families": [{"display_name": f} for f in fams],
+         "tags": list(tags), "indicator_count": n}
+        for fams, tags, n in pulses]}}
+
+
+def test_pulse_masivo_no_aporta_candidatos(attck_index):
+    """Caso real: un volcado de miles de indicadores con familia 'Cobalt Strike' le ganaba
+    con 0.9 al tag 'wannacry' de los reportes enfocados."""
+    r = resolve_entity_from_enrichment(
+        _pulses((["Emotet"], [], MAX_INDICADORES_PULSE + 1), ([], ["apt-falso"], 17)), attck_index)
+    assert r["nombre_canonico"] == "apt-falso" and r["confianza"] == 0.6
+    assert "1 pulse(s) masivo(s) descartado(s)" in r["evidencia"]
+
+
+def test_pulse_en_el_umbral_se_conserva(attck_index):
+    r = resolve_entity_from_enrichment(_pulses((["Emotet"], [], MAX_INDICADORES_PULSE)), attck_index)
+    assert r["nombre_canonico"] == "emotet" and "descartado" not in r["evidencia"]
+
+
+def test_solo_pulses_masivos_no_fuerza_asociacion(attck_index):
+    detalle = _pulses((["Emotet"], ["apt-falso"], 50_000))
+    assert resolve_entity_from_enrichment(detalle, attck_index) is None
+
+
+def test_gana_la_entidad_respaldada_por_mas_pulses(attck_index):
+    r = resolve_entity_from_enrichment(
+        _pulses((["Emotet"], [], 10), (["APT-Falso"], [], 10), (["apt-falso"], [], 10)), attck_index)
+    assert r["nombre_canonico"] == "apt-falso"
+    assert "'APT-Falso' (respaldado por 2 pulse(s))" in r["evidencia"]
+
+
+def test_un_pulse_vota_una_sola_vez_por_entidad(attck_index):
+    """Emotet y su alias Geodo repetidos en un pulse no suman más que un pulse aparte;
+    empatados, gana el que apareció primero."""
+    r = resolve_entity_from_enrichment(
+        _pulses((["Emotet", "Geodo", "Emotet"], [], 10), (["apt-falso"], [], 10)), attck_index)
+    assert r["nombre_canonico"] == "emotet" and "respaldado por 1 pulse(s)" in r["evidencia"]
 
 
 # --- correlación completa (etapas a + b) ---

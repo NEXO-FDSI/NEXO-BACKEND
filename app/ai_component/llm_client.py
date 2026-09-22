@@ -6,7 +6,9 @@ from openai import OpenAI
 
 from app.core.config import settings
 
-TIMEOUT = 30.0
+# 60s y no 30s: con qwen3:8b en CPU la generación tardaba 23-30+s y en la Etapa 9 dos de
+# cada tres informes salían sin sección de análisis.
+TIMEOUT = 60.0
 
 
 class LLMServiceError(RuntimeError):
@@ -17,7 +19,7 @@ class LLMServiceError(RuntimeError):
 def get_client() -> OpenAI:
     # Cacheado: la siembra hace ~700 llamadas y no necesita ~700 clientes httpx.
     # max_retries=0 porque el SDK reintenta 2 veces por defecto: eso convertiría el
-    # timeout de 30s en 90s de espera para el endpoint del informe.
+    # timeout de 60s en 180s de espera para el endpoint del informe.
     return OpenAI(
         base_url=settings.LLM_BASE_URL,
         api_key=settings.LLM_API_KEY,
@@ -40,8 +42,8 @@ def generate_analysis(prompt: str) -> str:
     try:
         # reasoning_effort=none apaga la cadena de pensamiento del modelo. Medido con
         # qwen3:8b sobre un prompt real: 67.5s razonando contra 19.3s sin razonar, o
-        # sea que con razonamiento el análisis SIEMPRE excedía el timeout de 30s y
-        # ningún informe llegaba a tener sección narrativa.
+        # sea que con razonamiento el análisis SIEMPRE excede el timeout (incluso el de
+        # 60s) y ningún informe llega a tener sección narrativa.
         respuesta = get_client().chat.completions.create(
             model=settings.LLM_MODEL,
             messages=[{"role": "user", "content": prompt}],

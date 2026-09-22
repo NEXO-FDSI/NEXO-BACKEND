@@ -6,10 +6,19 @@ from app.db.repositories import indicator_repository
 from app.enrichment.client import ReputationAPIError
 from app.enrichment.service import FUENTE, get_or_fetch_enrichment
 
-router = APIRouter(tags=["enrichment"])
+router = APIRouter(tags=["Enrichment"])
 
 
-@router.post("/indicators/{indicator_id}/enrich")
+@router.post(
+    "/indicators/{indicator_id}/enrich",
+    summary="Enriquecer un indicador con AlienVault OTX",
+    description=(
+        "Consulta la reputación del indicador en OTX y guarda la respuesta en caché: las "
+        "llamadas siguientes (y `/correlate`, `/report`) no vuelven a salir a la red. "
+        "`tiene_evidencia` es falso si ningún pulse lo menciona. **502** si OTX no respondió "
+        "(nunca se confunde con 'sin evidencia'); **404** si el indicador no existe."
+    ),
+)
 def enrich_indicator(indicator_id: int, db: Session = Depends(get_db)):
     indicator = indicator_repository.get(db, indicator_id)
     if indicator is None:

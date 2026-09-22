@@ -22,46 +22,78 @@ from app.db.repositories.indicator_entity_link import get_by_indicator_and_entit
 FUENTE_ATTCK = "MITRE ATT&CK STIX dataset — relationship 'uses'"
 CONFIANZA_MALWARE_FAMILIES = 0.9  # señal estructurada
 CONFIANZA_TAGS = 0.6  # señal ruidosa
+# Un pulse con más indicadores que esto es un volcado agregado, no un reporte enfocado.
+# Medido en la Etapa 9 sobre respuestas reales de OTX: los reportes enfocados tenían entre
+# 3 y 378 indicadores; los volcados que secuestraban la atribución (un hash de WannaCry
+# atribuido a Cobalt Strike con 0.9) tenían de 1.062 a más de un millón.
+MAX_INDICADORES_PULSE = 1000
 
 
-def _candidatos(detalle: dict) -> tuple[list[str], list[str]]:
-    """Candidatos de las dos fuentes permitidas, en orden de prioridad.
+def _candidatos(detalle: dict) -> tuple[list[list[str]], list[list[str]], int]:
+    """Candidatos por pulse de las dos fuentes permitidas, y cuántos pulses masivos se descartaron.
 
     pulse_info.pulses[].name NO se usa: es texto libre del autor del pulse y es
     justamente la fuente que produce atribución incorrecta.
     """
-    familias, tags = [], []
+    familias, tags, descartados = [], [], 0
     for pulse in (detalle.get("pulse_info") or {}).get("pulses") or []:
-        for familia in pulse.get("malware_families") or []:
-            nombre = familia.get("display_name") if isinstance(familia, dict) else familia
-            if nombre:
-                familias.append(nombre)
-        tags.extend(t for t in (pulse.get("tags") or []) if t)
-    return familias, tags
+        if (pulse.get("indicator_count") or 0) > MAX_INDICADORES_PULSE:
+            descartados += 1
+            continue
+        familias.append([
+            nombre
+            for familia in pulse.get("malware_families") or []
+            if (nombre := familia.get("display_name") if isinstance(familia, dict) else familia)
+        ])
+        tags.append([t for t in pulse.get("tags") or [] if t])
+    return familias, tags, descartados
+
+
+def _mas_respaldada(por_pulse: list[list[str]], index: AttckIndex) -> tuple[str, str, int] | None:
+    """(canónico, candidato textual, nº de pulses que lo respaldan) de la entidad con más
+    pulses distintos a favor. Empate: gana la que apareció primero."""
+    soporte: dict[str, int] = {}  # dict conserva el orden de aparición
+    texto: dict[str, str] = {}
+    for candidatos in por_pulse:
+        en_este_pulse = set()
+        for candidato in candidatos:
+            canonico = find_entity(index, candidato)
+            if canonico is None or canonico in en_este_pulse:
+                continue
+            en_este_pulse.add(canonico)
+            soporte[canonico] = soporte.get(canonico, 0) + 1
+            texto.setdefault(canonico, candidato)
+    if not soporte:
+        return None
+    ganador = max(soporte, key=soporte.__getitem__)  # max devuelve el primero entre empatados
+    return ganador, texto[ganador], soporte[ganador]
 
 
 def resolve_entity_from_enrichment(detalle: dict, index: AttckIndex) -> dict | None:
     """Etapa (a). Devuelve la entidad resuelta con su evidencia, o None."""
-    familias, tags = _candidatos(detalle)
+    familias, tags, descartados = _candidatos(detalle)
 
-    for candidatos, confianza, ruta in (
+    for por_pulse, confianza, ruta in (
         (familias, CONFIANZA_MALWARE_FAMILIES, "pulse_info.pulses[].malware_families[].display_name"),
         (tags, CONFIANZA_TAGS, "pulse_info.pulses[].tags[]"),
     ):
-        for candidato in candidatos:
-            canonico = find_entity(index, candidato)
-            if canonico is None:
-                continue
-            evidencia = f"{ruta} = '{candidato}'"
-            if canonico in index.ambiguous:
-                tipos = ", ".join(index.ambiguous[canonico])
-                evidencia += f" (nombre ambiguo en ATT&CK: {tipos} — técnicas fusionadas)"
-            return {
-                "nombre_canonico": canonico,
-                "tipo": index.entity_type[canonico],
-                "confianza": confianza,
-                "evidencia": evidencia,
-            }
+        ganador = _mas_respaldada(por_pulse, index)
+        if ganador is None:
+            continue
+        canonico, candidato, soporte = ganador
+        evidencia = f"{ruta} = '{candidato}' (respaldado por {soporte} pulse(s)"
+        if descartados:
+            evidencia += f"; {descartados} pulse(s) masivo(s) descartado(s)"
+        evidencia += ")"
+        if canonico in index.ambiguous:
+            tipos = ", ".join(index.ambiguous[canonico])
+            evidencia += f" (nombre ambiguo en ATT&CK: {tipos} — técnicas fusionadas)"
+        return {
+            "nombre_canonico": canonico,
+            "tipo": index.entity_type[canonico],
+            "confianza": confianza,
+            "evidencia": evidencia,
+        }
 
     return None  # evidencia insuficiente: no se fuerza ninguna asociación
 

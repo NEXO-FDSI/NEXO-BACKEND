@@ -1,0 +1,1496 @@
+{
+  "techniques": {
+    "T1001.001": {
+      "nombre": "Junk Data",
+      "tactica": "Command And Control"
+    },
+    "T1001.002": {
+      "nombre": "Steganography",
+      "tactica": "Command And Control"
+    },
+    "T1001.003": {
+      "nombre": "Protocol or Service Impersonation",
+      "tactica": "Command And Control"
+    },
+    "T1003.001": {
+      "nombre": "LSASS Memory",
+      "tactica": "Credential Access"
+    },
+    "T1003.002": {
+      "nombre": "Security Account Manager",
+      "tactica": "Credential Access"
+    },
+    "T1003.004": {
+      "nombre": "LSA Secrets",
+      "tactica": "Credential Access"
+    },
+    "T1005": {
+      "nombre": "Data from Local System",
+      "tactica": "Collection"
+    },
+    "T1007": {
+      "nombre": "System Service Discovery",
+      "tactica": "Discovery"
+    },
+    "T1008": {
+      "nombre": "Fallback Channels",
+      "tactica": "Command And Control"
+    },
+    "T1010": {
+      "nombre": "Application Window Discovery",
+      "tactica": "Discovery"
+    },
+    "T1012": {
+      "nombre": "Query Registry",
+      "tactica": "Discovery"
+    },
+    "T1016": {
+      "nombre": "System Network Configuration Discovery",
+      "tactica": "Discovery"
+    },
+    "T1016.001": {
+      "nombre": "Internet Connection Discovery",
+      "tactica": "Discovery"
+    },
+    "T1018": {
+      "nombre": "Remote System Discovery",
+      "tactica": "Discovery"
+    },
+    "T1021.001": {
+      "nombre": "Remote Desktop Protocol",
+      "tactica": "Lateral Movement"
+    },
+    "T1021.002": {
+      "nombre": "SMB/Windows Admin Shares",
+      "tactica": "Lateral Movement"
+    },
+    "T1021.003": {
+      "nombre": "Distributed Component Object Model",
+      "tactica": "Lateral Movement"
+    },
+    "T1021.004": {
+      "nombre": "SSH",
+      "tactica": "Lateral Movement"
+    },
+    "T1021.006": {
+      "nombre": "Windows Remote Management",
+      "tactica": "Lateral Movement"
+    },
+    "T1021.007": {
+      "nombre": "Cloud Services",
+      "tactica": "Lateral Movement"
+    },
+    "T1025": {
+      "nombre": "Data from Removable Media",
+      "tactica": "Collection"
+    },
+    "T1027": {
+      "nombre": "Obfuscated Files or Information",
+      "tactica": "Stealth"
+    },
+    "T1027.001": {
+      "nombre": "Binary Padding",
+      "tactica": "Stealth"
+    },
+    "T1027.002": {
+      "nombre": "Software Packing",
+      "tactica": "Stealth"
+    },
+    "T1027.003": {
+      "nombre": "Steganography",
+      "tactica": "Stealth"
+    },
+    "T1027.005": {
+      "nombre": "Indicator Removal from Tools",
+      "tactica": "Stealth"
+    },
+    "T1027.006": {
+      "nombre": "HTML Smuggling",
+      "tactica": "Stealth"
+    },
+    "T1027.007": {
+      "nombre": "Dynamic API Resolution",
+      "tactica": "Stealth"
+    },
+    "T1027.009": {
+      "nombre": "Embedded Payloads",
+      "tactica": "Stealth"
+    },
+    "T1027.010": {
+      "nombre": "Command Obfuscation",
+      "tactica": "Stealth"
+    },
+    "T1027.011": {
+      "nombre": "Fileless Storage",
+      "tactica": "Stealth"
+    },
+    "T1027.013": {
+      "nombre": "Encrypted/Encoded File",
+      "tactica": "Stealth"
+    },
+    "T1027.015": {
+      "nombre": "Compression",
+      "tactica": "Stealth"
+    },
+    "T1029": {
+      "nombre": "Scheduled Transfer",
+      "tactica": "Exfiltration"
+    },
+    "T1030": {
+      "nombre": "Data Transfer Size Limits",
+      "tactica": "Exfiltration"
+    },
+    "T1033": {
+      "nombre": "System Owner/User Discovery",
+      "tactica": "Discovery"
+    },
+    "T1036": {
+      "nombre": "Masquerading",
+      "tactica": "Stealth"
+    },
+    "T1036.003": {
+      "nombre": "Rename Legitimate Utilities",
+      "tactica": "Stealth"
+    },
+    "T1036.004": {
+      "nombre": "Masquerade Task or Service",
+      "tactica": "Stealth"
+    },
+    "T1036.005": {
+      "nombre": "Match Legitimate Resource Name or Location",
+      "tactica": "Stealth"
+    },
+    "T1037": {
+      "nombre": "Boot or Logon Initialization Scripts",
+      "tactica": "Persistence"
+    },
+    "T1037.004": {
+      "nombre": "RC Scripts",
+      "tactica": "Persistence"
+    },
+    "T1041": {
+      "nombre": "Exfiltration Over C2 Channel",
+      "tactica": "Exfiltration"
+    },
+    "T1046": {
+      "nombre": "Network Service Discovery",
+      "tactica": "Discovery"
+    },
+    "T1047": {
+      "nombre": "Windows Management Instrumentation",
+      "tactica": "Execution"
+    },
+    "T1048.003": {
+      "nombre": "Exfiltration Over Unencrypted Non-C2 Protocol",
+      "tactica": "Exfiltration"
+    },
+    "T1049": {
+      "nombre": "System Network Connections Discovery",
+      "tactica": "Discovery"
+    },
+    "T1053.005": {
+      "nombre": "Scheduled Task",
+      "tactica": "Execution"
+    },
+    "T1055": {
+      "nombre": "Process Injection",
+      "tactica": "Stealth"
+    },
+    "T1055.001": {
+      "nombre": "Dynamic-link Library Injection",
+      "tactica": "Stealth"
+    },
+    "T1055.012": {
+      "nombre": "Process Hollowing",
+      "tactica": "Stealth"
+    },
+    "T1056.001": {
+      "nombre": "Keylogging",
+      "tactica": "Collection"
+    },
+    "T1057": {
+      "nombre": "Process Discovery",
+      "tactica": "Discovery"
+    },
+    "T1059.001": {
+      "nombre": "PowerShell",
+      "tactica": "Execution"
+    },
+    "T1059.003": {
+      "nombre": "Windows Command Shell",
+      "tactica": "Execution"
+    },
+    "T1059.004": {
+      "nombre": "Unix Shell",
+      "tactica": "Execution"
+    },
+    "T1059.005": {
+      "nombre": "Visual Basic",
+      "tactica": "Execution"
+    },
+    "T1059.006": {
+      "nombre": "Python",
+      "tactica": "Execution"
+    },
+    "T1059.007": {
+      "nombre": "JavaScript",
+      "tactica": "Execution"
+    },
+    "T1059.009": {
+      "nombre": "Cloud API",
+      "tactica": "Execution"
+    },
+    "T1068": {
+      "nombre": "Exploitation for Privilege Escalation",
+      "tactica": "Privilege Escalation"
+    },
+    "T1069.001": {
+      "nombre": "Local Groups",
+      "tactica": "Discovery"
+    },
+    "T1069.002": {
+      "nombre": "Domain Groups",
+      "tactica": "Discovery"
+    },
+    "T1070": {
+      "nombre": "Indicator Removal",
+      "tactica": "Stealth"
+    },
+    "T1070.003": {
+      "nombre": "Clear Command History",
+      "tactica": "Stealth"
+    },
+    "T1070.004": {
+      "nombre": "File Deletion",
+      "tactica": "Stealth"
+    },
+    "T1070.006": {
+      "nombre": "Timestomp",
+      "tactica": "Stealth"
+    },
+    "T1070.007": {
+      "nombre": "Clear Network Connection History and Configurations",
+      "tactica": "Stealth"
+    },
+    "T1070.009": {
+      "nombre": "Clear Persistence",
+      "tactica": "Stealth"
+    },
+    "T1071.001": {
+      "nombre": "Web Protocols",
+      "tactica": "Command And Control"
+    },
+    "T1071.002": {
+      "nombre": "File Transfer Protocols",
+      "tactica": "Command And Control"
+    },
+    "T1071.003": {
+      "nombre": "Mail Protocols",
+      "tactica": "Command And Control"
+    },
+    "T1071.004": {
+      "nombre": "DNS",
+      "tactica": "Command And Control"
+    },
+    "T1074.001": {
+      "nombre": "Local Data Staging",
+      "tactica": "Collection"
+    },
+    "T1078": {
+      "nombre": "Valid Accounts",
+      "tactica": "Stealth"
+    },
+    "T1078.002": {
+      "nombre": "Domain Accounts",
+      "tactica": "Stealth"
+    },
+    "T1078.003": {
+      "nombre": "Local Accounts",
+      "tactica": "Stealth"
+    },
+    "T1078.004": {
+      "nombre": "Cloud Accounts",
+      "tactica": "Stealth"
+    },
+    "T1082": {
+      "nombre": "System Information Discovery",
+      "tactica": "Discovery"
+    },
+    "T1083": {
+      "nombre": "File and Directory Discovery",
+      "tactica": "Discovery"
+    },
+    "T1087.001": {
+      "nombre": "Local Account",
+      "tactica": "Discovery"
+    },
+    "T1087.002": {
+      "nombre": "Domain Account",
+      "tactica": "Discovery"
+    },
+    "T1087.004": {
+      "nombre": "Cloud Account",
+      "tactica": "Discovery"
+    },
+    "T1090": {
+      "nombre": "Proxy",
+      "tactica": "Command And Control"
+    },
+    "T1090.001": {
+      "nombre": "Internal Proxy",
+      "tactica": "Command And Control"
+    },
+    "T1090.002": {
+      "nombre": "External Proxy",
+      "tactica": "Command And Control"
+    },
+    "T1090.003": {
+      "nombre": "Multi-hop Proxy",
+      "tactica": "Command And Control"
+    },
+    "T1090.004": {
+      "nombre": "Domain Fronting",
+      "tactica": "Command And Control"
+    },
+    "T1095": {
+      "nombre": "Non-Application Layer Protocol",
+      "tactica": "Command And Control"
+    },
+    "T1098": {
+      "nombre": "Account Manipulation",
+      "tactica": "Persistence"
+    },
+    "T1098.002": {
+      "nombre": "Additional Email Delegate Permissions",
+      "tactica": "Persistence"
+    },
+    "T1098.005": {
+      "nombre": "Device Registration",
+      "tactica": "Persistence"
+    },
+    "T1102": {
+      "nombre": "Web Service",
+      "tactica": "Command And Control"
+    },
+    "T1102.002": {
+      "nombre": "Bidirectional Communication",
+      "tactica": "Command And Control"
+    },
+    "T1104": {
+      "nombre": "Multi-Stage Channels",
+      "tactica": "Command And Control"
+    },
+    "T1105": {
+      "nombre": "Ingress Tool Transfer",
+      "tactica": "Command And Control"
+    },
+    "T1106": {
+      "nombre": "Native API",
+      "tactica": "Execution"
+    },
+    "T1110": {
+      "nombre": "Brute Force",
+      "tactica": "Credential Access"
+    },
+    "T1110.001": {
+      "nombre": "Password Guessing",
+      "tactica": "Credential Access"
+    },
+    "T1110.003": {
+      "nombre": "Password Spraying",
+      "tactica": "Credential Access"
+    },
+    "T1112": {
+      "nombre": "Modify Registry",
+      "tactica": "Defense Impairment"
+    },
+    "T1113": {
+      "nombre": "Screen Capture",
+      "tactica": "Collection"
+    },
+    "T1114.002": {
+      "nombre": "Remote Email Collection",
+      "tactica": "Collection"
+    },
+    "T1115": {
+      "nombre": "Clipboard Data",
+      "tactica": "Collection"
+    },
+    "T1120": {
+      "nombre": "Peripheral Device Discovery",
+      "tactica": "Discovery"
+    },
+    "T1123": {
+      "nombre": "Audio Capture",
+      "tactica": "Collection"
+    },
+    "T1124": {
+      "nombre": "System Time Discovery",
+      "tactica": "Discovery"
+    },
+    "T1125": {
+      "nombre": "Video Capture",
+      "tactica": "Collection"
+    },
+    "T1132.001": {
+      "nombre": "Standard Encoding",
+      "tactica": "Command And Control"
+    },
+    "T1133": {
+      "nombre": "External Remote Services",
+      "tactica": "Persistence"
+    },
+    "T1134": {
+      "nombre": "Access Token Manipulation",
+      "tactica": "Stealth"
+    },
+    "T1134.001": {
+      "nombre": "Token Impersonation/Theft",
+      "tactica": "Stealth"
+    },
+    "T1134.002": {
+      "nombre": "Create Process with Token",
+      "tactica": "Stealth"
+    },
+    "T1134.003": {
+      "nombre": "Make and Impersonate Token",
+      "tactica": "Stealth"
+    },
+    "T1134.004": {
+      "nombre": "Parent PID Spoofing",
+      "tactica": "Stealth"
+    },
+    "T1135": {
+      "nombre": "Network Share Discovery",
+      "tactica": "Discovery"
+    },
+    "T1136.003": {
+      "nombre": "Cloud Account",
+      "tactica": "Persistence"
+    },
+    "T1137.001": {
+      "nombre": "Office Template Macros",
+      "tactica": "Persistence"
+    },
+    "T1140": {
+      "nombre": "Deobfuscate/Decode Files or Information",
+      "tactica": "Stealth"
+    },
+    "T1185": {
+      "nombre": "Browser Session Hijacking",
+      "tactica": "Collection"
+    },
+    "T1189": {
+      "nombre": "Drive-by Compromise",
+      "tactica": "Initial Access"
+    },
+    "T1190": {
+      "nombre": "Exploit Public-Facing Application",
+      "tactica": "Initial Access"
+    },
+    "T1197": {
+      "nombre": "BITS Jobs",
+      "tactica": "Stealth"
+    },
+    "T1199": {
+      "nombre": "Trusted Relationship",
+      "tactica": "Initial Access"
+    },
+    "T1201": {
+      "nombre": "Password Policy Discovery",
+      "tactica": "Discovery"
+    },
+    "T1202": {
+      "nombre": "Indirect Command Execution",
+      "tactica": "Stealth"
+    },
+    "T1203": {
+      "nombre": "Exploitation for Client Execution",
+      "tactica": "Execution"
+    },
+    "T1204.001": {
+      "nombre": "Malicious Link",
+      "tactica": "Execution"
+    },
+    "T1204.002": {
+      "nombre": "Malicious File",
+      "tactica": "Execution"
+    },
+    "T1210": {
+      "nombre": "Exploitation of Remote Services",
+      "tactica": "Lateral Movement"
+    },
+    "T1213.006": {
+      "nombre": "Databases",
+      "tactica": "Collection"
+    },
+    "T1218": {
+      "nombre": "System Binary Proxy Execution",
+      "tactica": "Stealth"
+    },
+    "T1218.005": {
+      "nombre": "Mshta",
+      "tactica": "Stealth"
+    },
+    "T1218.010": {
+      "nombre": "Regsvr32",
+      "tactica": "Stealth"
+    },
+    "T1218.011": {
+      "nombre": "Rundll32",
+      "tactica": "Stealth"
+    },
+    "T1219": {
+      "nombre": "Remote Access Tools",
+      "tactica": "Command And Control"
+    },
+    "T1222.001": {
+      "nombre": "Windows Permissions",
+      "tactica": "Defense Impairment"
+    },
+    "T1485": {
+      "nombre": "Data Destruction",
+      "tactica": "Impact"
+    },
+    "T1486": {
+      "nombre": "Data Encrypted for Impact",
+      "tactica": "Impact"
+    },
+    "T1489": {
+      "nombre": "Service Stop",
+      "tactica": "Impact"
+    },
+    "T1490": {
+      "nombre": "Inhibit System Recovery",
+      "tactica": "Impact"
+    },
+    "T1491.001": {
+      "nombre": "Internal Defacement",
+      "tactica": "Impact"
+    },
+    "T1497.001": {
+      "nombre": "System Checks",
+      "tactica": "Stealth"
+    },
+    "T1497.002": {
+      "nombre": "User Activity Based Checks",
+      "tactica": "Stealth"
+    },
+    "T1497.003": {
+      "nombre": "Time Based Checks",
+      "tactica": "Stealth"
+    },
+    "T1505.003": {
+      "nombre": "Web Shell",
+      "tactica": "Persistence"
+    },
+    "T1518": {
+      "nombre": "Software Discovery",
+      "tactica": "Discovery"
+    },
+    "T1518.001": {
+      "nombre": "Security Software Discovery",
+      "tactica": "Discovery"
+    },
+    "T1528": {
+      "nombre": "Steal Application Access Token",
+      "tactica": "Credential Access"
+    },
+    "T1529": {
+      "nombre": "System Shutdown/Reboot",
+      "tactica": "Impact"
+    },
+    "T1542.003": {
+      "nombre": "Bootkit",
+      "tactica": "Stealth"
+    },
+    "T1543.003": {
+      "nombre": "Windows Service",
+      "tactica": "Persistence"
+    },
+    "T1546.003": {
+      "nombre": "Windows Management Instrumentation Event Subscription",
+      "tactica": "Privilege Escalation"
+    },
+    "T1546.008": {
+      "nombre": "Accessibility Features",
+      "tactica": "Privilege Escalation"
+    },
+    "T1546.012": {
+      "nombre": "Image File Execution Options Injection",
+      "tactica": "Privilege Escalation"
+    },
+    "T1546.013": {
+      "nombre": "PowerShell Profile",
+      "tactica": "Privilege Escalation"
+    },
+    "T1547.001": {
+      "nombre": "Registry Run Keys / Startup Folder",
+      "tactica": "Persistence"
+    },
+    "T1547.004": {
+      "nombre": "Winlogon Helper DLL",
+      "tactica": "Persistence"
+    },
+    "T1547.009": {
+      "nombre": "Shortcut Modification",
+      "tactica": "Persistence"
+    },
+    "T1548.002": {
+      "nombre": "Bypass User Account Control",
+      "tactica": "Privilege Escalation"
+    },
+    "T1548.003": {
+      "nombre": "Sudo and Sudo Caching",
+      "tactica": "Privilege Escalation"
+    },
+    "T1550.002": {
+      "nombre": "Pass the Hash",
+      "tactica": "Lateral Movement"
+    },
+    "T1550.003": {
+      "nombre": "Pass the Ticket",
+      "tactica": "Lateral Movement"
+    },
+    "T1552.001": {
+      "nombre": "Credentials In Files",
+      "tactica": "Credential Access"
+    },
+    "T1553.002": {
+      "nombre": "Code Signing",
+      "tactica": "Defense Impairment"
+    },
+    "T1553.005": {
+      "nombre": "Mark-of-the-Web Bypass",
+      "tactica": "Defense Impairment"
+    },
+    "T1553.006": {
+      "nombre": "Code Signing Policy Modification",
+      "tactica": "Defense Impairment"
+    },
+    "T1555": {
+      "nombre": "Credentials from Password Stores",
+      "tactica": "Credential Access"
+    },
+    "T1555.003": {
+      "nombre": "Credentials from Web Browsers",
+      "tactica": "Credential Access"
+    },
+    "T1555.004": {
+      "nombre": "Windows Credential Manager",
+      "tactica": "Credential Access"
+    },
+    "T1556.007": {
+      "nombre": "Hybrid Identity",
+      "tactica": "Defense Impairment"
+    },
+    "T1557.001": {
+      "nombre": "Name Resolution Poisoning and SMB Relay",
+      "tactica": "Credential Access"
+    },
+    "T1560": {
+      "nombre": "Archive Collected Data",
+      "tactica": "Collection"
+    },
+    "T1560.001": {
+      "nombre": "Archive via Utility",
+      "tactica": "Collection"
+    },
+    "T1560.002": {
+      "nombre": "Archive via Library",
+      "tactica": "Collection"
+    },
+    "T1560.003": {
+      "nombre": "Archive via Custom Method",
+      "tactica": "Collection"
+    },
+    "T1561.001": {
+      "nombre": "Disk Content Wipe",
+      "tactica": "Impact"
+    },
+    "T1561.002": {
+      "nombre": "Disk Structure Wipe",
+      "tactica": "Impact"
+    },
+    "T1563.002": {
+      "nombre": "RDP Hijacking",
+      "tactica": "Lateral Movement"
+    },
+    "T1564": {
+      "nombre": "Hide Artifacts",
+      "tactica": "Stealth"
+    },
+    "T1564.001": {
+      "nombre": "Hidden Files and Directories",
+      "tactica": "Stealth"
+    },
+    "T1564.003": {
+      "nombre": "Hidden Window",
+      "tactica": "Stealth"
+    },
+    "T1564.010": {
+      "nombre": "Process Argument Spoofing",
+      "tactica": "Stealth"
+    },
+    "T1564.012": {
+      "nombre": "File/Path Exclusions",
+      "tactica": "Stealth"
+    },
+    "T1566.001": {
+      "nombre": "Spearphishing Attachment",
+      "tactica": "Initial Access"
+    },
+    "T1566.002": {
+      "nombre": "Spearphishing Link",
+      "tactica": "Initial Access"
+    },
+    "T1566.003": {
+      "nombre": "Spearphishing via Service",
+      "tactica": "Initial Access"
+    },
+    "T1567.002": {
+      "nombre": "Exfiltration to Cloud Storage",
+      "tactica": "Exfiltration"
+    },
+    "T1568": {
+      "nombre": "Dynamic Resolution",
+      "tactica": "Command And Control"
+    },
+    "T1569.002": {
+      "nombre": "Service Execution",
+      "tactica": "Execution"
+    },
+    "T1570": {
+      "nombre": "Lateral Tool Transfer",
+      "tactica": "Lateral Movement"
+    },
+    "T1571": {
+      "nombre": "Non-Standard Port",
+      "tactica": "Command And Control"
+    },
+    "T1572": {
+      "nombre": "Protocol Tunneling",
+      "tactica": "Command And Control"
+    },
+    "T1573": {
+      "nombre": "Encrypted Channel",
+      "tactica": "Command And Control"
+    },
+    "T1573.001": {
+      "nombre": "Symmetric Cryptography",
+      "tactica": "Command And Control"
+    },
+    "T1573.002": {
+      "nombre": "Asymmetric Cryptography",
+      "tactica": "Command And Control"
+    },
+    "T1574.001": {
+      "nombre": "DLL",
+      "tactica": "Stealth"
+    },
+    "T1574.013": {
+      "nombre": "KernelCallbackTable",
+      "tactica": "Stealth"
+    },
+    "T1583.001": {
+      "nombre": "Domains",
+      "tactica": "Resource Development"
+    },
+    "T1583.006": {
+      "nombre": "Web Services",
+      "tactica": "Resource Development"
+    },
+    "T1584.003": {
+      "nombre": "Virtual Private Server",
+      "tactica": "Resource Development"
+    },
+    "T1584.004": {
+      "nombre": "Server",
+      "tactica": "Resource Development"
+    },
+    "T1584.006": {
+      "nombre": "Web Services",
+      "tactica": "Resource Development"
+    },
+    "T1585.001": {
+      "nombre": "Social Media Accounts",
+      "tactica": "Resource Development"
+    },
+    "T1585.002": {
+      "nombre": "Email Accounts",
+      "tactica": "Resource Development"
+    },
+    "T1586.002": {
+      "nombre": "Email Accounts",
+      "tactica": "Resource Development"
+    },
+    "T1586.003": {
+      "nombre": "Cloud Accounts",
+      "tactica": "Resource Development"
+    },
+    "T1587.001": {
+      "nombre": "Malware",
+      "tactica": "Resource Development"
+    },
+    "T1587.003": {
+      "nombre": "Digital Certificates",
+      "tactica": "Resource Development"
+    },
+    "T1588.001": {
+      "nombre": "Malware",
+      "tactica": "Resource Development"
+    },
+    "T1588.002": {
+      "nombre": "Tool",
+      "tactica": "Resource Development"
+    },
+    "T1588.004": {
+      "nombre": "Digital Certificates",
+      "tactica": "Resource Development"
+    },
+    "T1589.002": {
+      "nombre": "Email Addresses",
+      "tactica": "Reconnaissance"
+    },
+    "T1591": {
+      "nombre": "Gather Victim Org Information",
+      "tactica": "Reconnaissance"
+    },
+    "T1595.002": {
+      "nombre": "Vulnerability Scanning",
+      "tactica": "Reconnaissance"
+    },
+    "T1614": {
+      "nombre": "System Location Discovery",
+      "tactica": "Discovery"
+    },
+    "T1615": {
+      "nombre": "Group Policy Discovery",
+      "tactica": "Discovery"
+    },
+    "T1620": {
+      "nombre": "Reflective Code Loading",
+      "tactica": "Stealth"
+    },
+    "T1621": {
+      "nombre": "Multi-Factor Authentication Request Generation",
+      "tactica": "Credential Access"
+    },
+    "T1649": {
+      "nombre": "Steal or Forge Authentication Certificates",
+      "tactica": "Credential Access"
+    },
+    "T1651": {
+      "nombre": "Cloud Administration Command",
+      "tactica": "Execution"
+    },
+    "T1665": {
+      "nombre": "Hide Infrastructure",
+      "tactica": "Command And Control"
+    },
+    "T1680": {
+      "nombre": "Local Storage Discovery",
+      "tactica": "Discovery"
+    },
+    "T1685": {
+      "nombre": "Disable or Modify Tools",
+      "tactica": "Defense Impairment"
+    },
+    "T1685.002": {
+      "nombre": "Disable or Modify Cloud Log",
+      "tactica": "Defense Impairment"
+    },
+    "T1685.005": {
+      "nombre": "Clear Windows Event Logs",
+      "tactica": "Defense Impairment"
+    },
+    "T1686.003": {
+      "nombre": "Windows Host Firewall",
+      "tactica": "Defense Impairment"
+    }
+  },
+  "entity_type": {
+    "apt29": "grupo",
+    "blackcat": "malware",
+    "cobalt strike": "malware",
+    "dridex": "malware",
+    "kazuar": "malware",
+    "lazarus group": "grupo",
+    "quasarrat": "herramienta",
+    "raindrop": "malware",
+    "remcos": "herramienta",
+    "sunburst": "malware",
+    "supernova": "malware",
+    "teardrop": "malware",
+    "turla": "grupo",
+    "wannacry": "malware"
+  },
+  "entity_aliases": {
+    "alphv": "blackcat",
+    "belugasturgeon": "turla",
+    "blue kitsune": "apt29",
+    "bugat v5": "dridex",
+    "cozy bear": "apt29",
+    "dark halo": "apt29",
+    "diamond sleet": "lazarus group",
+    "group 88": "turla",
+    "guardians of peace": "lazarus group",
+    "hidden cobra": "lazarus group",
+    "iron hemlock": "apt29",
+    "iron hunter": "turla",
+    "iron ritual": "apt29",
+    "krypton": "turla",
+    "labyrinth chollima": "lazarus group",
+    "midnight blizzard": "apt29",
+    "nickel academy": "lazarus group",
+    "nobelium": "apt29",
+    "noberus": "blackcat",
+    "noblebaron": "apt29",
+    "secret blizzard": "turla",
+    "solarstorm": "apt29",
+    "solorigate": "sunburst",
+    "the dukes": "apt29",
+    "unc2452": "apt29",
+    "unc3524": "apt29",
+    "venomous bear": "turla",
+    "wanacry": "wannacry",
+    "wanacrypt": "wannacry",
+    "wanacrypt0r": "wannacry",
+    "waterbug": "turla",
+    "wcry": "wannacry",
+    "xrat": "quasarrat",
+    "yttrium": "apt29",
+    "zinc": "lazarus group"
+  },
+  "entity_techniques": {
+    "apt29": [
+      "T1621",
+      "T1003.002",
+      "T1588.002",
+      "T1090.004",
+      "T1528",
+      "T1568",
+      "T1068",
+      "T1546.003",
+      "T1547.001",
+      "T1136.003",
+      "T1098.005",
+      "T1587.003",
+      "T1005",
+      "T1105",
+      "T1651",
+      "T1566.001",
+      "T1078.004",
+      "T1053.005",
+      "T1016.001",
+      "T1587.001",
+      "T1583.006",
+      "T1090.003",
+      "T1037",
+      "T1027.006",
+      "T1070.004",
+      "T1203",
+      "T1550.003",
+      "T1204.001",
+      "T1036.005",
+      "T1110.003",
+      "T1114.002",
+      "T1027.001",
+      "T1556.007",
+      "T1059.001",
+      "T1133",
+      "T1037.004",
+      "T1021.007",
+      "T1595.002",
+      "T1566.002",
+      "T1070.006",
+      "T1586.003",
+      "T1090.002",
+      "T1573",
+      "T1047",
+      "T1110.001",
+      "T1199",
+      "T1566.003",
+      "T1078",
+      "T1505.003",
+      "T1059.006",
+      "T1665",
+      "T1218.005",
+      "T1003.004",
+      "T1190",
+      "T1553.005",
+      "T1649",
+      "T1087.004",
+      "T1098.002",
+      "T1078.003",
+      "T1546.008",
+      "T1059.009",
+      "T1586.002",
+      "T1204.002",
+      "T1685.002",
+      "T1548.002",
+      "T1027.002"
+    ],
+    "blackcat": [
+      "T1570",
+      "T1685.005",
+      "T1018",
+      "T1486",
+      "T1489",
+      "T1082",
+      "T1548.002",
+      "T1087.002",
+      "T1112",
+      "T1069.002",
+      "T1047",
+      "T1680",
+      "T1135",
+      "T1222.001",
+      "T1491.001",
+      "T1561.001",
+      "T1059.003",
+      "T1083",
+      "T1033",
+      "T1490",
+      "T1134"
+    ],
+    "cobalt strike": [
+      "T1090.004",
+      "T1548.003",
+      "T1553.002",
+      "T1059.007",
+      "T1021.001",
+      "T1106",
+      "T1550.002",
+      "T1078.002",
+      "T1027.005",
+      "T1548.002",
+      "T1016",
+      "T1569.002",
+      "T1005",
+      "T1055.001",
+      "T1056.001",
+      "T1197",
+      "T1055.012",
+      "T1518",
+      "T1078.003",
+      "T1090.001",
+      "T1068",
+      "T1113",
+      "T1564.010",
+      "T1112",
+      "T1069.002",
+      "T1049",
+      "T1001.003",
+      "T1134.004",
+      "T1134.001",
+      "T1543.003",
+      "T1059.005",
+      "T1055",
+      "T1007",
+      "T1070.006",
+      "T1083",
+      "T1071.004",
+      "T1029",
+      "T1069.001",
+      "T1059.001",
+      "T1021.004",
+      "T1620",
+      "T1018",
+      "T1003.001",
+      "T1685",
+      "T1012",
+      "T1087.002",
+      "T1497.002",
+      "T1030",
+      "T1046",
+      "T1135",
+      "T1071.001",
+      "T1573.002",
+      "T1185",
+      "T1140",
+      "T1572",
+      "T1021.006",
+      "T1573.001",
+      "T1095",
+      "T1132.001",
+      "T1105",
+      "T1021.002",
+      "T1218.011",
+      "T1071.002",
+      "T1059.006",
+      "T1047",
+      "T1003.002",
+      "T1134.003",
+      "T1203",
+      "T1021.003",
+      "T1057",
+      "T1137.001",
+      "T1059.003",
+      "T1027"
+    ],
+    "dridex": [
+      "T1573.001",
+      "T1574.001",
+      "T1219",
+      "T1106",
+      "T1053.005",
+      "T1185",
+      "T1518",
+      "T1071.001",
+      "T1218.010",
+      "T1573.002",
+      "T1027",
+      "T1090",
+      "T1082",
+      "T1090.003",
+      "T1204.002"
+    ],
+    "kazuar": [
+      "T1547.001",
+      "T1105",
+      "T1485",
+      "T1070.004",
+      "T1027",
+      "T1132.001",
+      "T1057",
+      "T1083",
+      "T1033",
+      "T1090.001",
+      "T1069.001",
+      "T1125",
+      "T1059.004",
+      "T1055.001",
+      "T1071.002",
+      "T1543.003",
+      "T1082",
+      "T1102.002",
+      "T1008",
+      "T1071.001",
+      "T1010",
+      "T1113",
+      "T1029",
+      "T1680",
+      "T1087.001",
+      "T1074.001",
+      "T1005",
+      "T1016",
+      "T1047",
+      "T1547.009",
+      "T1059.003"
+    ],
+    "lazarus group": [
+      "T1059.003",
+      "T1566.001",
+      "T1202",
+      "T1048.003",
+      "T1001.003",
+      "T1584.004",
+      "T1105",
+      "T1218.005",
+      "T1010",
+      "T1587.001",
+      "T1134.002",
+      "T1021.004",
+      "T1098",
+      "T1564.001",
+      "T1485",
+      "T1591",
+      "T1106",
+      "T1078",
+      "T1027.009",
+      "T1012",
+      "T1090.002",
+      "T1027.013",
+      "T1104",
+      "T1046",
+      "T1005",
+      "T1489",
+      "T1016",
+      "T1588.004",
+      "T1573.001",
+      "T1082",
+      "T1033",
+      "T1620",
+      "T1041",
+      "T1102.002",
+      "T1560",
+      "T1203",
+      "T1059.001",
+      "T1566.002",
+      "T1074.001",
+      "T1036.003",
+      "T1047",
+      "T1071.001",
+      "T1557.001",
+      "T1057",
+      "T1547.001",
+      "T1685",
+      "T1589.002",
+      "T1561.001",
+      "T1491.001",
+      "T1588.002",
+      "T1547.009",
+      "T1059.005",
+      "T1542.003",
+      "T1218.011",
+      "T1583.006",
+      "T1056.001",
+      "T1571",
+      "T1132.001",
+      "T1189",
+      "T1110.003",
+      "T1204.002",
+      "T1553.002",
+      "T1218",
+      "T1560.002",
+      "T1027.007",
+      "T1070.004",
+      "T1090.001",
+      "T1008",
+      "T1140",
+      "T1680",
+      "T1561.002",
+      "T1583.001",
+      "T1053.005",
+      "T1566.003",
+      "T1036.005",
+      "T1070",
+      "T1083",
+      "T1574.013",
+      "T1055.001",
+      "T1585.001",
+      "T1021.001",
+      "T1529",
+      "T1124",
+      "T1036.004",
+      "T1070.006",
+      "T1070.003",
+      "T1574.001",
+      "T1686.003",
+      "T1543.003",
+      "T1021.002",
+      "T1585.002",
+      "T1049",
+      "T1560.003"
+    ],
+    "quasarrat": [
+      "T1021.001",
+      "T1056.001",
+      "T1573.001",
+      "T1555.003",
+      "T1547.001",
+      "T1564.003",
+      "T1082",
+      "T1105",
+      "T1614",
+      "T1112",
+      "T1564.001",
+      "T1033",
+      "T1548.002",
+      "T1005",
+      "T1095",
+      "T1016",
+      "T1555",
+      "T1552.001",
+      "T1059.003",
+      "T1090",
+      "T1571",
+      "T1553.002",
+      "T1010",
+      "T1053.005",
+      "T1125"
+    ],
+    "raindrop": [
+      "T1497.003",
+      "T1027.013",
+      "T1027.002",
+      "T1036",
+      "T1036.005",
+      "T1027.003",
+      "T1140"
+    ],
+    "remcos": [
+      "T1491.001",
+      "T1547.001",
+      "T1082",
+      "T1115",
+      "T1055",
+      "T1566.001",
+      "T1059.006",
+      "T1090",
+      "T1112",
+      "T1573.002",
+      "T1027",
+      "T1543.003",
+      "T1497.001",
+      "T1059.003",
+      "T1027.013",
+      "T1548.002",
+      "T1113",
+      "T1560.001",
+      "T1070",
+      "T1564.003",
+      "T1105",
+      "T1059.005",
+      "T1204.002",
+      "T1568",
+      "T1056.001",
+      "T1125",
+      "T1012",
+      "T1564",
+      "T1083",
+      "T1123",
+      "T1070.004",
+      "T1057",
+      "T1614",
+      "T1010",
+      "T1529",
+      "T1033",
+      "T1059.007",
+      "T1132.001"
+    ],
+    "sunburst": [
+      "T1497.003",
+      "T1047",
+      "T1082",
+      "T1112",
+      "T1573.001",
+      "T1132.001",
+      "T1070.009",
+      "T1005",
+      "T1124",
+      "T1083",
+      "T1685",
+      "T1016",
+      "T1027",
+      "T1546.012",
+      "T1218.011",
+      "T1027.015",
+      "T1007",
+      "T1036.005",
+      "T1553.002",
+      "T1057",
+      "T1001.003",
+      "T1001.001",
+      "T1059.005",
+      "T1071.004",
+      "T1070.004",
+      "T1070.007",
+      "T1497.001",
+      "T1012",
+      "T1518.001",
+      "T1033",
+      "T1105",
+      "T1027.005",
+      "T1071.001",
+      "T1001.002",
+      "T1568",
+      "T1070"
+    ],
+    "supernova": [
+      "T1071.001",
+      "T1203",
+      "T1036.005",
+      "T1505.003",
+      "T1027.013"
+    ],
+    "teardrop": [
+      "T1012",
+      "T1027",
+      "T1112",
+      "T1543.003",
+      "T1036.005",
+      "T1140"
+    ],
+    "turla": [
+      "T1584.006",
+      "T1112",
+      "T1069.001",
+      "T1140",
+      "T1588.002",
+      "T1059.007",
+      "T1134.002",
+      "T1059.005",
+      "T1546.013",
+      "T1583.006",
+      "T1055.001",
+      "T1105",
+      "T1555.004",
+      "T1090",
+      "T1068",
+      "T1615",
+      "T1049",
+      "T1106",
+      "T1071.003",
+      "T1021.002",
+      "T1547.001",
+      "T1005",
+      "T1012",
+      "T1007",
+      "T1110",
+      "T1570",
+      "T1189",
+      "T1584.004",
+      "T1087.002",
+      "T1685",
+      "T1564.012",
+      "T1120",
+      "T1567.002",
+      "T1102.002",
+      "T1071.001",
+      "T1124",
+      "T1087.001",
+      "T1204.001",
+      "T1090.001",
+      "T1546.003",
+      "T1560.001",
+      "T1059.003",
+      "T1057",
+      "T1016",
+      "T1587.001",
+      "T1025",
+      "T1518.001",
+      "T1059.001",
+      "T1027.010",
+      "T1059.006",
+      "T1213.006",
+      "T1018",
+      "T1588.001",
+      "T1069.002",
+      "T1027.011",
+      "T1547.004",
+      "T1553.006",
+      "T1566.002",
+      "T1016.001",
+      "T1102",
+      "T1082",
+      "T1584.003",
+      "T1036.005",
+      "T1055",
+      "T1078.003",
+      "T1201",
+      "T1083",
+      "T1027.005"
+    ],
+    "wannacry": [
+      "T1210",
+      "T1489",
+      "T1083",
+      "T1120",
+      "T1486",
+      "T1047",
+      "T1563.002",
+      "T1490",
+      "T1018",
+      "T1564.001",
+      "T1016",
+      "T1222.001",
+      "T1090.003",
+      "T1573.002",
+      "T1543.003",
+      "T1570"
+    ]
+  },
+  "ambiguous": {}
+}
