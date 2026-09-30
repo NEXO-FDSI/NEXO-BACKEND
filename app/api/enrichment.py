@@ -11,12 +11,16 @@ router = APIRouter(tags=["Enrichment"])
 
 @router.post(
     "/indicators/{indicator_id}/enrich",
-    summary="Enriquecer un indicador con AlienVault OTX",
+    summary="Enriquecer un indicador (OTX, ThreatFox, VirusTotal)",
     description=(
-        "Consulta la reputación del indicador en OTX y guarda la respuesta en caché: las "
-        "llamadas siguientes (y `/correlate`, `/report`) no vuelven a salir a la red. "
-        "`tiene_evidencia` es falso si ningún pulse lo menciona. **502** si OTX no respondió "
-        "(nunca se confunde con 'sin evidencia'); **404** si el indicador no existe."
+        "Consulta el indicador en cada fuente configurada (OTX, ThreatFox, VirusTotal) en "
+        "paralelo y guarda cada respuesta en caché: las llamadas siguientes (y `/correlate`, "
+        "`/report`) no vuelven a salir a la red. `tiene_evidencia` y `detalle` son de OTX; "
+        "`fuentes` trae por fuente su `estado` (`con_evidencia`, `sin_evidencia`, `error`, "
+        "`limite_cuota`, `no_soportado`, `no_configurado`, `omitido`) y un resumen normalizado. "
+        "Las IPs no públicas no se envían a terceros. **502** si OTX no respondió (nunca se "
+        "confunde con 'sin evidencia'); si falla otra fuente, 200 con su estado. **404** si "
+        "el indicador no existe."
     ),
 )
 def enrich_indicator(indicator_id: int, db: Session = Depends(get_db)):
@@ -30,7 +34,10 @@ def enrich_indicator(indicator_id: int, db: Session = Depends(get_db)):
         resultado = get_or_fetch_enrichment(db, indicator)
         db.commit()
     except ReputationAPIError as exc:
-        db.rollback()
+        # commit y no rollback: lo único pendiente son las cachés de las fuentes que SÍ
+        # respondieron. Guardarlas hace que "Reintentar" solo vuelva a consultar OTX y no
+        # gaste otra vez cuota de VirusTotal (4 consultas/min) por datos que ya tenemos.
+        db.commit()
         # 502 y nunca 200 'sin evidencia': no pude verificar != verifiqué y no hay nada.
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

@@ -1,5 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
@@ -108,6 +109,26 @@ def sin_llm_real(monkeypatch):
         raise AssertionError("un test intentó llamar al LLM real")
 
     monkeypatch.setattr("app.ai_component.service.generate_analysis", _prohibido)
+
+
+@pytest.fixture(autouse=True)
+def sin_fuentes_reales(monkeypatch):
+    """Garantía estructural de que ninguna prueba salga a ThreatFox ni a VirusTotal.
+
+    Aunque el .env tenga claves reales, en tests esas fuentes quedan "no configuradas".
+    Los tests de fuentes las configuran y sustituyen el HTTP de forma explícita.
+    """
+    monkeypatch.setattr(settings, "THREATFOX_API_KEY", SecretStr(""))
+    monkeypatch.setattr(settings, "VIRUSTOTAL_API_KEY", SecretStr(""))
+
+    def _prohibido(*args, **kwargs):
+        raise AssertionError("un test intentó consultar una fuente real")
+
+    monkeypatch.setattr("app.enrichment.providers.base.httpx.request", _prohibido)
+    # Los reintentos esperan 0,5 s: en tests no aporta nada salvo lentitud. Se anula la
+    # constante del módulo, no time.sleep (que es global y afectaría a otros tests).
+    monkeypatch.setattr("app.enrichment.client.ESPERA_REINTENTO", 0)
+    monkeypatch.setattr("app.enrichment.providers.base.ESPERA_REINTENTO", 0)
 
 
 @pytest.fixture

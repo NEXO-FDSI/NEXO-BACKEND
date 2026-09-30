@@ -84,7 +84,10 @@ def test_segunda_llamada_viene_de_cache(db):
         segundo = get_or_fetch_enrichment(db, ind)
 
     assert mock.call_count == 1, "la segunda llamada debió salir de caché, sin HTTP"
-    assert primero == segundo
+    assert primero["detalle"] == segundo["detalle"]
+    assert primero["tiene_evidencia"] == segundo["tiene_evidencia"]
+    [otx] = [f for f in segundo["fuentes"] if f["fuente"] == FUENTE]
+    assert otx["desde_cache"] is True and otx["latencia_ms"] is None
     filas = [f for f in enrichment_cache_repository.list(db) if f.indicator_id == ind.id]
     assert len(filas) == 1
 
@@ -171,7 +174,10 @@ def test_endpoint_segunda_llamada_no_repite_http(client, db):
         segundo = client.post(f"/indicators/{ind.id}/enrich")
 
     assert primero.status_code == segundo.status_code == 200
-    assert primero.json() == segundo.json()
+    a, b = primero.json(), segundo.json()
+    # Mismos datos; solo cambian los metadatos de caché de cada fuente.
+    assert {k: v for k, v in a.items() if k != "fuentes"} == {k: v for k, v in b.items() if k != "fuentes"}
+    assert [f["resumen"] for f in a["fuentes"]] == [f["resumen"] for f in b["fuentes"]]
     assert mock.call_count == 1
 
 
@@ -232,6 +238,24 @@ def test_fallo_de_red_es_reputation_api_error():
     with patch(HTTPX_TARGET, side_effect=httpx.ConnectTimeout("agotó el tiempo")):
         with pytest.raises(ReputationAPIError, match="fallo de red"):
             fetch_reputation("ip", "8.8.8.8", "clave")
+
+
+def test_otx_reintenta_una_vez_ante_timeout_o_5xx():
+    respuestas = [httpx.ReadTimeout("colgado"), httpx.Response(200, json=_otx(1))]
+    with patch(HTTPX_TARGET, side_effect=respuestas) as mock:
+        assert fetch_reputation("ip", "8.8.8.8", "clave") == _otx(1)
+    assert mock.call_count == 2
+
+    with patch(HTTPX_TARGET, side_effect=[httpx.Response(503), httpx.Response(200, json=_otx(0))]) as mock:
+        assert fetch_reputation("ip", "8.8.8.8", "clave") == _otx(0)
+    assert mock.call_count == 2
+
+
+def test_otx_no_reintenta_4xx():
+    with patch(HTTPX_TARGET, return_value=httpx.Response(400, json={"detail": "x"})) as mock:
+        with pytest.raises(ReputationAPIError):
+            fetch_reputation("domain", "a.com", "clave")
+    assert mock.call_count == 1
 
 
 def test_200_con_cuerpo_no_json_es_error():

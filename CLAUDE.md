@@ -75,8 +75,12 @@ Flujo del pipeline, un endpoint por paso (cada uno exige el anterior):
 1. `POST /indicators` — el `model_validator` de `IndicatorCreate` primero
    normaliza (refang, canonización) y luego valida el valor ya canónico
    (formato inválido → 422); duplicado → 409 por la restricción única.
-2. `POST /indicators/{id}/enrich` — consulta OTX y guarda la respuesta en
-   `enrichment_cache`. Si la API falla → 502, nunca un 200 "sin evidencia".
+2. `POST /indicators/{id}/enrich` — consulta en paralelo las fuentes de
+   `app/enrichment/providers/` (OTX, ThreatFox, VirusTotal) y guarda cada
+   respuesta en `enrichment_cache` (una fila por `fuente_api`). OTX es
+   obligatoria: si falla → 502, nunca un 200 "sin evidencia" (las demás
+   fuentes que respondieron se guardan igual). Las otras fuentes informan su
+   `estado` en `fuentes[]`. Las IPs no públicas no se envían a terceros.
 3. `POST /indicators/{id}/correlate` — correlación determinística contra
    el índice ATT&CK a partir del enriquecimiento cacheado (400 si no
    existe).
@@ -119,6 +123,11 @@ determinístico).
   inyectan con `get_attck_index` / `get_vector_store`. En tests el
   lifespan no corre: `conftest.py` sobreescribe esas dependencias con un
   índice sintético (técnicas `T900x`) y un `FakeVectorStore`.
+- Un fixture autouse (`sin_fuentes_reales`) deja ThreatFox y VirusTotal
+  "no configuradas" en tests aunque el `.env` tenga claves, y hace fallar
+  cualquier HTTP real de las fuentes. Agregar una fuente = un archivo en
+  `app/enrichment/providers/` que cumpla `Proveedor` + una línea en
+  `PROVEEDORES`.
 - Un fixture autouse en `conftest.py` hace fallar cualquier test que
   llame al LLM real; los tests que lo necesitan parchean
   `app.ai_component.service.generate_analysis`, que devuelve

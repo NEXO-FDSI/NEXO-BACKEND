@@ -10,7 +10,10 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     TEST_DATABASE_URL: str = ""  # Postgres efímero en Docker; solo para tests
     # SecretStr: si alguien imprime o loguea settings, la clave sale como '**********'.
-    REPUTATION_API_KEY: SecretStr = SecretStr("")
+    REPUTATION_API_KEY: SecretStr = SecretStr("")  # AlienVault OTX
+    # Fuentes adicionales: sin clave quedan "no configuradas" y el pipeline sigue con OTX.
+    THREATFOX_API_KEY: SecretStr = SecretStr("")
+    VIRUSTOTAL_API_KEY: SecretStr = SecretStr("")
     CORS_ORIGINS: str = ""
     ATTCK_STIX_PATH: str = "data/attck/enterprise-attack-19.1.json"
     LOG_LEVEL: str = "INFO"

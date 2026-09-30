@@ -1,5 +1,3 @@
-import json
-
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -9,8 +7,7 @@ from app.api.correlation import get_attck_index
 from app.correlation.attck_loader import AttckIndex
 from app.db.database import get_db
 from app.db.repositories import indicator_repository
-from app.db.repositories.enrichment_cache import get_by_indicator_and_source
-from app.enrichment.service import FUENTE
+from app.enrichment.service import detalle_otx
 from app.reporting.service import generate_report
 from app.schemas.indicator import IndicatorCreate, IndicatorRead
 from app.schemas.report import ReportRead
@@ -77,15 +74,13 @@ def create_report(
             status_code=status.HTTP_404_NOT_FOUND, detail="Indicador no encontrado"
         )
 
-    cacheado = get_by_indicator_and_source(db, indicator_id, FUENTE)
-    if cacheado is None:
+    detalle = detalle_otx(db, indicator)
+    if detalle is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Debes ejecutar /enrich para este indicador antes de generar el informe",
         )
 
-    report = generate_report(
-        db, indicator, json.loads(cacheado.respuesta_json), index, vector_store
-    )
+    report = generate_report(db, indicator, detalle, index, vector_store)
     db.commit()
     return report
