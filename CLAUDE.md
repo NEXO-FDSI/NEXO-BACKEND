@@ -21,9 +21,12 @@ Grupo 2, Escuela Colombiana de Ingeniería Julio Garavito. El frontend
   `pydantic-settings` — nunca `os.getenv` disperso.
 - Tests corren contra un Postgres local en Docker
   (`docker-compose.test.yml`), **nunca** contra Supabase.
-- IA: LLM vía cliente `openai` apuntando a Ollama local por defecto
-  (`qwen3:8b`, embeddings `nomic-embed-text`); vector store Chroma
-  persistido en `data/chroma/`.
+- IA: LLM vía cliente `openai` contra cualquier endpoint compatible. Un
+  proveedor es un **perfil de configuración** (`LLM_*` primario,
+  `LLM_FALLBACK_*` respaldo), no una clase: hoy Groq
+  (`qwen/qwen3.8-27b`) con respaldo en Ollama local (`qwen3:8b`).
+  Embeddings `nomic-embed-text` con endpoint propio (`EMBEDDING_BASE_URL`,
+  solo para sembrar); vector store Chroma persistido en `data/chroma/`.
 
 ## Comandos
 
@@ -118,7 +121,8 @@ determinístico).
   índice sintético (técnicas `T900x`) y un `FakeVectorStore`.
 - Un fixture autouse en `conftest.py` hace fallar cualquier test que
   llame al LLM real; los tests que lo necesitan parchean
-  `app.ai_component.service.generate_analysis`.
+  `app.ai_component.service.generate_analysis`, que devuelve
+  `(texto, meta)` (proveedor, modelo, latencia, tokens, intentos fallidos).
 - Cada test corre en una transacción con rollback
   (`join_transaction_mode="create_savepoint"`), así que los `commit()`
   de los endpoints no persisten entre tests.
@@ -139,6 +143,9 @@ determinístico).
   respuesta en un test hace falta `TestClient(app, raise_server_exceptions=False)`.
 
 ## Roadmap y estado
+
+Evolución posterior (sprint de demo): diagnóstico y un informe por fase
+en `docs/evolucion/`.
 
 Plan completo de 9 etapas en `docs/PlanBackendNexo.md`. Prompt detallado
 de cada etapa en `docs/stages/etapaNN.md`. Las 9 etapas están

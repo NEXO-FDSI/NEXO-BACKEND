@@ -18,7 +18,6 @@ Course project for **Seminario de Seguridad de la Información 2026-2** — Escu
 
 > Sibling repo: [`nexo-intel-frontend`](https://github.com/NEXO-FDSI/NEXO-FRONTEND.git) — the web interface that consumes this API. They run separately, not as a monorepo.
 
-**Status:** all 9 stages of the backend plan are complete. The backend is ready for frontend integration.
 
 ## Contents
 

@@ -83,7 +83,9 @@ def test_flujo_completo(client, db, vector_store, monkeypatch):
                   "metadata": {"nombre": "Falsa Dos", "tactica": "Execution"}},
     }
     monkeypatch.setattr("app.ai_component.service.generate_analysis",
-                        lambda prompt: "Emotet se asocia por su familia de malware.")
+                        lambda prompt: ("Emotet se asocia por su familia de malware.",
+                                        {"proveedor": "groq", "modelo": "qwen", "latencia_ms": 900,
+                                         "tokens": {}, "intentos_fallidos": []}))
 
     r = client.post("/indicators", json={"tipo": "ip", "valor": "20.0.0.1"})
     assert r.status_code == 201
@@ -96,6 +98,7 @@ def test_flujo_completo(client, db, vector_store, monkeypatch):
     assert informe["indicator_id"] == ind_id and informe["nivel_confianza"] == 0.9
     assert "emotet" in informe["contenido"] and "T9001" in informe["contenido"]
     assert "## Análisis\n\nEmotet se asocia por su familia de malware." in informe["contenido"]
+    assert "*Redactado por IA: groq · qwen · 900 ms." in informe["contenido"]
 
     r = client.post(f"/reports/{informe['id']}/validate",
                     json={"decision": "aceptado", "analista": "analista de prueba"})
@@ -140,6 +143,11 @@ def test_validate_422_decision_invalida(client, db):
     _cachear(db, ind, _detalle())
     report_id = client.post(f"/indicators/{ind.id}/report").json()["id"]
     r = client.post(f"/reports/{report_id}/validate", json={"decision": "quizas"})
+    assert r.status_code == 422
+
+
+def test_validate_422_analista_demasiado_largo(client):
+    r = client.post("/reports/1/validate", json={"decision": "aceptado", "analista": "a" * 101})
     assert r.status_code == 422
 
 

@@ -17,11 +17,21 @@ def nivel_confianza(correlation_result: dict) -> float:
     return float(correlation_result["confianza"]) if correlation_result["resuelto"] else 0.0
 
 
+def autoria_ia(meta: dict) -> str:
+    """Línea de trazabilidad: qué proveedor y modelo redactó el análisis, y si fue respaldo."""
+    linea = f"*Redactado por IA: {meta['proveedor']} · {meta['modelo']} · {meta['latencia_ms']} ms"
+    if meta.get("intentos_fallidos"):
+        caidos = ", ".join(i["proveedor"] for i in meta["intentos_fallidos"])
+        linea += f" (respaldo: {caidos} no respondió)"
+    return linea + ". Basado solo en el texto oficial de ATT&CK de las técnicas listadas.*"
+
+
 def build_report_content(
     indicator: Indicator,
     enrichment_detalle: dict,
     correlation_result: dict,
     analysis_text: str | None = None,
+    analysis_meta: dict | None = None,
 ) -> str:
     pulses = (enrichment_detalle.get("pulse_info") or {}).get("count") or 0
     lineas = [
@@ -66,5 +76,7 @@ def build_report_content(
     # La sección existe siempre: si el análisis no está, se dice por qué en vez de
     # dejar un hueco que parezca un error de generación.
     lineas += ["", "## Análisis", "", analysis_text or ANALISIS_NO_DISPONIBLE]
+    if analysis_text and analysis_meta:
+        lineas += ["", autoria_ia(analysis_meta)]
     lineas += ["", "## Estado de validación", "", "Pendiente de revisión humana.", ""]
     return "\n".join(lineas)

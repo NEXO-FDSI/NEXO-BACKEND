@@ -19,13 +19,13 @@ def generate_report(
     """Correlaciona (idempotente), redacta con la plantilla y persiste. Sin commit."""
     resultado = correlate_indicator(db, indicator, enrichment_detalle, index)
     # Nunca propaga un fallo de IA: devuelve None y el informe sale sin narrativa.
-    analisis = generate_grounded_analysis(indicator, resultado, vector_store)
+    analisis, meta_ia = generate_grounded_analysis(indicator, resultado, vector_store)
     return report_repository.create(
         db,
         {
             "indicator_id": indicator.id,
             "contenido": build_report_content(
-                indicator, enrichment_detalle, resultado, analisis
+                indicator, enrichment_detalle, resultado, analisis, meta_ia
             ),
             "nivel_confianza": nivel_confianza(resultado),
         },

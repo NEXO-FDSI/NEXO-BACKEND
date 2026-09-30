@@ -4,6 +4,9 @@ import json
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy import event
+
+from app.correlation.attck_loader import AttckIndex
 
 from app.correlation.service import (
     MAX_INDICADORES_PULSE,
@@ -181,6 +184,34 @@ def test_idempotente(db, attck_index):
     assert len(entity_repository.list(db)) == 1
     assert len(indicator_entity_link_repository.list(db)) == 1
     assert len(entity_technique_link_repository.list(db)) == 2
+
+
+def test_queries_constantes_sin_importar_el_numero_de_tecnicas(db):
+    """Fase 1 de evolución: antes eran ~6 queries por técnica (552 para Lazarus Group)."""
+    def _indice(n):
+        ids = [f"T{8000 + i}" for i in range(n)]
+        return AttckIndex(
+            techniques={t: {"nombre": t, "tactica": "Execution"} for t in ids},
+            entity_type={"masiva": "grupo"},
+            entity_techniques={"masiva": ids},
+        )
+
+    def _contar(valor, index):
+        ind = _indicador(db, valor)
+        conteo = []
+        escucha = lambda *args, **kwargs: conteo.append(1)  # noqa: E731
+        event.listen(db.bind, "before_cursor_execute", escucha)
+        try:
+            r = correlate_indicator(db, ind, _detalle(familias=["Masiva"]), index)
+        finally:
+            event.remove(db.bind, "before_cursor_execute", escucha)
+        return len(conteo), r
+
+    pocas, _ = _contar("1.1.1.1", _indice(3))
+    muchas, r = _contar("2.2.2.2", _indice(100))
+    assert len(r["tecnicas"]) == 100
+    assert muchas <= pocas + 2, f"{muchas} queries para 100 técnicas vs {pocas} para 3"
+    assert len(entity_technique_link_repository.list(db, limit=200)) == 100
 
 
 def test_retrieve_es_puro(attck_index):

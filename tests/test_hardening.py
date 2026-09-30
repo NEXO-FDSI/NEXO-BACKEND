@@ -66,3 +66,25 @@ def test_cors_acepta_origenes_explicitos():
     s = Settings(DATABASE_URL="postgresql+psycopg://x@localhost/x",
                  CORS_ORIGINS="http://localhost:5173, https://nexo.example")
     assert s.cors_origins == ["http://localhost:5173", "https://nexo.example"]
+
+
+def test_claves_no_aparecen_al_imprimir_settings():
+    s = Settings(DATABASE_URL="postgresql+psycopg://x@localhost/x",
+                 REPUTATION_API_KEY="clave-otx-secreta", LLM_API_KEY="clave-llm-secreta")
+    for texto in (repr(s), str(s), str(s.model_dump())):
+        assert "clave-otx-secreta" not in texto and "clave-llm-secreta" not in texto
+    assert s.REPUTATION_API_KEY.get_secret_value() == "clave-otx-secreta"
+
+
+def test_cors_no_habilita_credenciales(client):
+    origen = "http://localhost:5173"
+    r = client.options("/indicators", headers={
+        "Origin": origen, "Access-Control-Request-Method": "POST"})
+    assert "access-control-allow-credentials" not in r.headers
+
+
+def test_clientes_http_nunca_loguean_en_debug():
+    """En DEBUG httpx/httpx2 imprimen cabeceras con las API keys de OTX, TF, VT y el LLM."""
+    for nombre in ("httpx", "httpx2"):
+        # Nivel propio (no heredado): así sigue en INFO aunque LOG_LEVEL=DEBUG baje la raíz.
+        assert logging.getLogger(nombre).level >= logging.INFO

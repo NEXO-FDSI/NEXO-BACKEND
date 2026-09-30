@@ -7,7 +7,10 @@ services:
     env_file: .env   # DATABASE_URL de Supabase, REPUTATION_API_KEY, etc.
     environment:
       # Dentro del contenedor, localhost es el propio contenedor: Ollama corre en el host.
-      LLM_BASE_URL: http://host.docker.internal:11434/v1
+      # Ollama es el respaldo y el endpoint de embeddings; el primario (Groq) viene del .env.
+      # Si el primario también es Ollama, pon LLM_BASE_URL=http://host.docker.internal:11434/v1 en el .env.
+      LLM_FALLBACK_BASE_URL: http://host.docker.internal:11434/v1
+      EMBEDDING_BASE_URL: http://host.docker.internal:11434/v1
     extra_hosts:
       - "host.docker.internal:host-gateway"   # necesario en Linux
     volumes:

@@ -8,16 +8,12 @@ retrieve_techniques_for_entity.
 from sqlalchemy.orm import Session
 
 from app.correlation.attck_loader import AttckIndex, find_entity
-from app.db.models import Indicator
-from app.db.repositories import (
-    entity_repository,
-    entity_technique_link_repository,
-    indicator_entity_link_repository,
-    technique_repository,
-)
+from app.db.models import EntityTechniqueLink, Indicator, Technique
+from app.db.repositories import entity_repository, indicator_entity_link_repository
 from app.db.repositories.entity import get_by_nombre
-from app.db.repositories.entity_technique_link import get_by_entity_and_technique
+from app.db.repositories.entity_technique_link import technique_ids_enlazadas
 from app.db.repositories.indicator_entity_link import get_by_indicator_and_entity
+from app.db.repositories.technique import ids_existentes
 
 FUENTE_ATTCK = "MITRE ATT&CK STIX dataset — relationship 'uses'"
 CONFIANZA_MALWARE_FAMILIES = 0.9  # señal estructurada
@@ -103,6 +99,27 @@ def retrieve_techniques_for_entity(nombre_canonico: str, index: AttckIndex) -> l
     return list(index.entity_techniques.get(nombre_canonico, []))
 
 
+def _persistir_tecnicas(db: Session, entity_id: int, ids: list[str], index: AttckIndex) -> None:
+    """Crea las técnicas y los links que falten con dos SELECT en lote y un solo flush.
+
+    Una consulta por técnica hacía 552 queries para Lazarus Group (93 técnicas): ~41 s
+    contra Supabase a 75 ms por viaje (línea base de la Fase 0 de evolución).
+    """
+    if not ids:
+        return
+    existentes = ids_existentes(db, ids)
+    enlazadas = technique_ids_enlazadas(db, entity_id, ids)
+    # techniques debe existir antes del link (FK a techniques.id) y el seed puede no haber
+    # corrido todavía: el unit of work de SQLAlchemy inserta Technique antes que el link.
+    db.add_all(Technique(id=t, **index.techniques[t]) for t in ids if t not in existentes)
+    db.add_all(
+        EntityTechniqueLink(entity_id=entity_id, technique_id=t, fuente_attck=FUENTE_ATTCK)
+        for t in ids
+        if t not in enlazadas
+    )
+    db.flush()
+
+
 def correlate_indicator(
     db: Session, indicator: Indicator, detalle: dict, index: AttckIndex
 ) -> dict:
@@ -135,25 +152,12 @@ def correlate_indicator(
             },
         )
 
-    tecnicas = []
-    for technique_id in retrieve_techniques_for_entity(nombre, index):
-        datos = index.techniques.get(technique_id)
-        if datos is None:
-            continue
-        # techniques debe existir antes del link: entity_technique_link.technique_id
-        # tiene FK a techniques.id y el seed puede no haber corrido todavía.
-        if technique_repository.get(db, technique_id) is None:
-            technique_repository.create(db, {"id": technique_id, **datos})
-        if get_by_entity_and_technique(db, entity.id, technique_id) is None:
-            entity_technique_link_repository.create(
-                db,
-                {
-                    "entity_id": entity.id,
-                    "technique_id": technique_id,
-                    "fuente_attck": FUENTE_ATTCK,
-                },
-            )
-        tecnicas.append({"id": technique_id, **datos})
+    tecnicas = [
+        {"id": tid, **index.techniques[tid]}
+        for tid in retrieve_techniques_for_entity(nombre, index)
+        if tid in index.techniques
+    ]
+    _persistir_tecnicas(db, entity.id, [t["id"] for t in tecnicas], index)
 
     return {
         "resuelto": True,

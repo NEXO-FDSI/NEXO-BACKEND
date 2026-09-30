@@ -37,9 +37,10 @@ def ia(vector_store, monkeypatch) -> list[str]:
     }
     prompts = []
 
-    def _redactar(prompt: str) -> str:
+    def _redactar(prompt: str) -> tuple[str, dict]:
         prompts.append(prompt)
-        return ANALISIS
+        return ANALISIS, {"proveedor": "prueba", "modelo": "congelado", "latencia_ms": 1,
+                          "tokens": {}, "intentos_fallidos": []}
 
     monkeypatch.setattr("app.ai_component.service.generate_analysis", _redactar)
     return prompts

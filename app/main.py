@@ -1,4 +1,5 @@
 import logging
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
@@ -10,7 +11,15 @@ from app.api import correlation, enrichment, indicators, reports
 from app.correlation.attck_loader import load_attck_index
 from app.core.config import settings
 
+logging.basicConfig(
+    level=settings.LOG_LEVEL, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
+# En DEBUG imprimen las cabeceras, y ahí viajan las API keys. httpx lo usan las fuentes de
+# enriquecimiento; httpx2 es el cliente interno del SDK de openai (3.x).
+for _nombre in ("httpx", "httpx2"):
+    logging.getLogger(_nombre).setLevel(max(logging.INFO, logging.getLogger().level))
 logger = logging.getLogger(__name__)
+http_logger = logging.getLogger("app.http")
 
 DESCRIPCION = """
 Enriquecimiento de indicadores de compromiso (IP, dominio, hash, URL) con correlación
@@ -55,10 +64,22 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    allow_credentials=True,
+    allow_credentials=False,  # la API no usa cookies ni auth
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def medir_duracion(request: Request, call_next):
+    """Una línea por request con su duración: la base para medir cada paso del pipeline."""
+    inicio = time.perf_counter()
+    response = await call_next(request)
+    http_logger.info(
+        "%s %s -> %d en %.0f ms", request.method, request.url.path, response.status_code,
+        (time.perf_counter() - inicio) * 1000,
+    )
+    return response
 
 
 @app.exception_handler(Exception)

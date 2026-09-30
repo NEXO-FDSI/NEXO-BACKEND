@@ -104,3 +104,12 @@ def test_invalido_sigue_siendo_422_tras_normalizar(client):
     """La normalización no puede convertir un 422 en un 500."""
     for tipo, valor in [("ip", "no-es-una-ip"), ("url", "hxxp[:]//"), ("domain", "-mal.com")]:
         assert _post(client, tipo, valor).status_code == 422
+
+
+@pytest.mark.parametrize("campo, valor", [
+    ("valor", "https://a.com/" + "x" * 2040),
+    ("fuente", "f" * 201),
+])
+def test_campos_demasiado_largos_son_422(client, campo, valor):
+    cuerpo = {"tipo": "url", "valor": "https://largo.example/ok", campo: valor}
+    assert client.post("/indicators", json=cuerpo).status_code == 422

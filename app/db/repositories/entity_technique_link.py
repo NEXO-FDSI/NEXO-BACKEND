@@ -7,15 +7,10 @@ from app.db.repositories.base import BaseRepository
 entity_technique_link_repository = BaseRepository[EntityTechniqueLink](EntityTechniqueLink)
 
 
-def get_by_entity_and_technique(
-    db: Session, entity_id: int, technique_id: str
-) -> EntityTechniqueLink | None:
-    stmt = (
-        select(EntityTechniqueLink)
-        .where(
-            EntityTechniqueLink.entity_id == entity_id,
-            EntityTechniqueLink.technique_id == technique_id,
-        )
-        .limit(1)
+def technique_ids_enlazadas(db: Session, entity_id: int, technique_ids: list[str]) -> set[str]:
+    """De esas técnicas, las que ya tienen link con la entidad. Un solo SELECT."""
+    stmt = select(EntityTechniqueLink.technique_id).where(
+        EntityTechniqueLink.entity_id == entity_id,
+        EntityTechniqueLink.technique_id.in_(technique_ids),
     )
-    return db.scalars(stmt).first()
+    return set(db.scalars(stmt))

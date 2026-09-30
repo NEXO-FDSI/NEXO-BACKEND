@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.ingestion.validators import validate_indicator
 from app.normalization.normalizer import normalize_indicator
@@ -17,6 +17,10 @@ class IndicatorBase(BaseModel):
 
 class IndicatorCreate(IndicatorBase):
     tipo: IndicatorTipo
+    # Topes en la frontera de entrada: 2048 cubre cualquier URL real (y coincide con el
+    # maxLength del formulario); fuente es una etiqueta corta, no un documento.
+    valor: str = Field(max_length=2048)
+    fuente: str | None = Field(default=None, max_length=200)
 
     @model_validator(mode="after")
     def _normalizar_y_validar(self):

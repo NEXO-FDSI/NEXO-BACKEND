@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class HumanValidationBase(BaseModel):
@@ -25,4 +25,4 @@ class HumanValidationRequest(BaseModel):
     """Body de POST /reports/{id}/validate: report_id viene de la URL, no del body."""
 
     decision: Literal["aceptado", "rechazado"]
-    analista: str | None = None
+    analista: str | None = Field(default=None, max_length=100)

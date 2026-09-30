@@ -4,6 +4,8 @@ El fixture autouse sin_llm_real del conftest hace que cualquier llamada no parch
 LLM reviente con AssertionError, así que "el LLM no fue invocado" se afirma solo.
 """
 
+import logging
+
 import pytest
 
 from app.ai_component.llm_client import LLMServiceError
@@ -25,6 +27,8 @@ RESUELTO = {
         {"id": "T9002", "nombre": "Falsa Dos", "tactica": "Execution"},
     ],
 }
+META = {"proveedor": "groq", "modelo": "m", "latencia_ms": 900, "tokens": {}, "intentos_fallidos": []}
+
 SIN_EVIDENCIA = {
     "resuelto": False, "entity": None, "confianza": None, "evidencia": None, "tecnicas": [],
 }
@@ -92,30 +96,33 @@ def test_prompt_omite_tecnicas_ausentes_del_indice():
 
 def test_sin_resolver_no_toca_ni_vector_store_ni_llm():
     store = FakeVectorStore(TEXTOS)
-    assert generate_grounded_analysis(INDICADOR, SIN_EVIDENCIA, store) is None
+    assert generate_grounded_analysis(INDICADOR, SIN_EVIDENCIA, store) == (None, None)
     assert store.llamadas == []  # el corte ocurre antes de cualquier recuperación
 
 
 def test_indice_vacio_no_llama_al_llm():
     store = FakeVectorStore()  # ninguna técnica sembrada
-    assert generate_grounded_analysis(INDICADOR, RESUELTO, store) is None
+    assert generate_grounded_analysis(INDICADOR, RESUELTO, store) == (None, None)
     assert store.llamadas == [["T9001", "T9002"]]  # se consultó, pero no devolvió nada
 
 
 def test_devuelve_el_texto_del_llm(monkeypatch):
     monkeypatch.setattr(
-        "app.ai_component.service.generate_analysis", lambda prompt: "Análisis redactado."
+        "app.ai_component.service.generate_analysis", lambda prompt: ("Análisis redactado.", META)
     )
     resultado = generate_grounded_analysis(INDICADOR, RESUELTO, FakeVectorStore(TEXTOS))
-    assert resultado == "Análisis redactado."
+    assert resultado == ("Análisis redactado.", META)
 
 
-def test_fallo_del_llm_devuelve_none_sin_propagar(monkeypatch):
+def test_fallo_del_llm_devuelve_none_sin_propagar(monkeypatch, caplog):
     def _revienta(prompt: str) -> str:
         raise LLMServiceError("timeout")
 
     monkeypatch.setattr("app.ai_component.service.generate_analysis", _revienta)
-    assert generate_grounded_analysis(INDICADOR, RESUELTO, FakeVectorStore(TEXTOS)) is None
+    with caplog.at_level(logging.WARNING, logger="app.ai_component.service"):
+        assert generate_grounded_analysis(INDICADOR, RESUELTO, FakeVectorStore(TEXTOS)) == (None, None)
+    # Se traga pero no en silencio: el motivo queda en el log del servidor.
+    assert "timeout" in caplog.text
 
 
 def test_errores_ajenos_al_servicio_de_ia_si_se_propagan(monkeypatch):

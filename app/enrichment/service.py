@@ -23,7 +23,7 @@ def get_or_fetch_enrichment(db: Session, indicator: Indicator) -> dict:
         crudo = json.loads(cacheado.respuesta_json)  # cero HTTP
     else:
         crudo = client.fetch_reputation(
-            indicator.tipo, indicator.valor, settings.REPUTATION_API_KEY
+            indicator.tipo, indicator.valor, settings.REPUTATION_API_KEY.get_secret_value()
         )
         enrichment_cache_repository.create(
             db,
