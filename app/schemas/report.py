@@ -1,6 +1,7 @@
+import json
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class ReportBase(BaseModel):
@@ -18,3 +19,10 @@ class ReportRead(ReportBase):
 
     id: int
     timestamp: datetime
+    metadatos: dict | None = None
+
+    @field_validator("metadatos", mode="before")
+    @classmethod
+    def _desde_json(cls, v):
+        # En la BD es Text con JSON; hacia la API sale como objeto.
+        return json.loads(v) if isinstance(v, str) else v

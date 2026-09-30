@@ -37,10 +37,12 @@ def ia(vector_store, monkeypatch) -> list[str]:
     }
     prompts = []
 
-    def _redactar(prompt: str) -> tuple[str, dict]:
+    def _redactar(prompt: str, validar) -> tuple:
         prompts.append(prompt)
-        return ANALISIS, {"proveedor": "prueba", "modelo": "congelado", "latencia_ms": 1,
-                          "tokens": {}, "intentos_fallidos": []}
+        # Pasa por el validador real: el e2e también ejercita el parseo del JSON.
+        return validar(json.dumps({"resumen": ANALISIS})), {
+            "proveedor": "prueba", "modelo": "congelado", "latencia_ms": 1,
+            "tokens": {}, "intentos_fallidos": []}
 
     monkeypatch.setattr("app.ai_component.service.generate_analysis", _redactar)
     return prompts

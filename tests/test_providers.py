@@ -346,3 +346,17 @@ def test_status_informa_fuentes_e_ia_sin_secretos(client, monkeypatch):
     assert cuerpo["ia"]["proveedor"] == settings.LLM_PROVIDER
     assert "clave-tf-secreta" not in r.text
     assert settings.LLM_API_KEY.get_secret_value() not in r.text
+
+
+def test_otx_ignora_familias_y_tags_de_volcados_masivos():
+    """Etapa 9 aplicada al resumen: "Detects" o "Imphash: ..." de un volcado no describen
+    al indicador. Medido en vivo: el LLM tomó un tag de volcado como evidencia."""
+    crudo = {"pulse_info": {"count": 2, "pulses": [
+        {"indicator_count": 50, "malware_families": [{"display_name": "WannaCry"}], "tags": ["ransomware"]},
+        {"indicator_count": 250_000, "malware_families": [{"display_name": "Detects"}],
+         "tags": ["Imphash: 9698f46495ce9401c8bcaf9a2afe1598"]},
+    ]}}
+    r = OTX().resumir(crudo, "hash", HASH)
+    assert r["familias"] == ["WannaCry"] and r["etiquetas"] == ["ransomware"]
+    assert r["detecciones"] == {"pulses": 2, "pulses_masivos": 1}
+    assert "1 son volcados masivos y se ignoran" in base.describir(r)

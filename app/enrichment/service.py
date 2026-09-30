@@ -44,12 +44,15 @@ def _cronometrar(proveedor: Proveedor, tipo: str, valor: str) -> tuple[dict, int
     return crudo, round((time.perf_counter() - inicio) * 1000)
 
 
-def get_or_fetch_enrichment(db: Session, indicator: Indicator) -> dict:
+def get_or_fetch_enrichment(db: Session, indicator: Indicator, consultar: bool = True) -> dict:
     """Consulta cada fuente (de caché si existe; en paralelo si no) y resume su resultado.
 
     Devuelve {tiene_evidencia, detalle, fuentes}: los dos primeros son de OTX, como
     siempre; `fuentes` trae el estado y el resumen normalizado de cada una.
     Deja propagar ReputationAPIError si OTX falla.
+
+    consultar=False: solo caché, cero HTTP (lo usa el informe). Una fuente configurada sin
+    caché queda "no_disponible": falló o alcanzó su cuota cuando se ejecutó /enrich.
     """
     tipo, valor = indicator.tipo, indicator.valor
     entradas: dict[str, dict] = {}
@@ -71,8 +74,10 @@ def get_or_fetch_enrichment(db: Session, indicator: Indicator) -> dict:
         elif cacheado := get_by_indicator_and_source(db, indicator.id, p.nombre):
             crudos[p.nombre] = json.loads(cacheado.respuesta_json)  # cero HTTP
             entrada["desde_cache"] = True
-        else:
+        elif consultar:
             pendientes[p.nombre] = p
+        else:
+            entrada.update(estado="no_disponible", error="sin respuesta registrada de esta fuente")
 
     if pendientes:
         # Solo el HTTP va a hilos: la Session no es thread-safe, así que la caché se escribe

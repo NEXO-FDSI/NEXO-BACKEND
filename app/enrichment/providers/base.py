@@ -108,3 +108,30 @@ def solicitar(metodo: str, url: str, fuente: str, **kwargs) -> httpx.Response:
                 return respuesta
         time.sleep(ESPERA_REINTENTO)
     raise AssertionError("inalcanzable")
+
+
+def describir(r: dict) -> str:
+    """Resumen normalizado → una frase. La usan el prompt del LLM y el informe, así una
+    fuente nueva aparece en ambos sin tocar ninguno de los dos."""
+    partes = [f"veredicto de la fuente: {r['veredicto'].replace('_', ' ')}"]
+    detecciones = r.get("detecciones") or {}
+    if "pulses" in detecciones:
+        partes.append(f"{detecciones['pulses']} pulse(s) de la comunidad lo mencionan")
+        if detecciones.get("pulses_masivos"):
+            partes.append(f"{detecciones['pulses_masivos']} son volcados masivos y se ignoran")
+    if "registros" in detecciones:
+        partes.append(f"{detecciones['registros']} registro(s) del indicador")
+    if "maliciosos" in detecciones:
+        partes.append(
+            f"{detecciones['maliciosos']} de {detecciones['total']} motores lo marcan malicioso"
+            f" y {detecciones['sospechosos']} sospechoso"
+        )
+    if r.get("familias"):
+        partes.append("familias reportadas: " + ", ".join(r["familias"]))
+    if r.get("confianza") is not None:
+        partes.append(f"confianza de la fuente: {r['confianza']}/100")
+    if r.get("etiquetas"):
+        partes.append("etiquetas: " + ", ".join(r["etiquetas"][:5]))
+    if r.get("primera_vez"):
+        partes.append(f"visto por primera vez: {r['primera_vez']}")
+    return "; ".join(partes) + "."

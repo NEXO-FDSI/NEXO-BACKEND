@@ -84,8 +84,13 @@ Flujo del pipeline, un endpoint por paso (cada uno exige el anterior):
 3. `POST /indicators/{id}/correlate` — correlación determinística contra
    el índice ATT&CK a partir del enriquecimiento cacheado (400 si no
    existe).
-4. `POST /indicators/{id}/report` — correlación + análisis del LLM
-   grounded en los textos de técnicas recuperados de Chroma.
+4. `POST /indicators/{id}/report` — correlación + severidad y concordancia
+   entre fuentes (determinísticas, `app/reporting/severity.py`) + análisis
+   del LLM en JSON sobre un contexto con IDs citables (`E-COR`, `E-OTX`,
+   `E-TF`, `E-VT`, `T####`). La salida se valida y se depura
+   (`app/ai_component/schema.py`): lo que cite fuera del contexto se
+   descarta. Todo queda en `reports.metadatos` (JSON en Text): contexto,
+   prompt, salida, descartes, modelo, latencia, estado de las fuentes.
 5. `POST /reports/{id}/validate` — validación humana; cada decisión es
    una fila nueva (historial auditable).
 
@@ -130,8 +135,9 @@ determinístico).
   `PROVEEDORES`.
 - Un fixture autouse en `conftest.py` hace fallar cualquier test que
   llame al LLM real; los tests que lo necesitan parchean
-  `app.ai_component.service.generate_analysis`, que devuelve
-  `(texto, meta)` (proveedor, modelo, latencia, tokens, intentos fallidos).
+  `app.ai_component.service.generate_analysis(prompt, validar)`, que
+  devuelve `(validar(json), meta)` (proveedor, modelo, latencia, tokens,
+  intentos fallidos). Los stubs deben pasar su JSON por `validar`.
 - Cada test corre en una transacción con rollback
   (`join_transaction_mode="create_savepoint"`), así que los `commit()`
   de los endpoints no persisten entre tests.

@@ -3,6 +3,7 @@
 from urllib.parse import quote
 
 from app.core.config import settings
+from app.correlation.service import MAX_INDICADORES_PULSE
 from app.enrichment import client  # el módulo, no el símbolo: así el patch de los tests aplica
 from app.enrichment.providers.base import resumen, unicos
 
@@ -28,7 +29,11 @@ class OTX:
 
     def resumir(self, crudo: dict, tipo: str, valor: str) -> dict:
         info = crudo.get("pulse_info") or {}
-        pulses = [p for p in info.get("pulses") or [] if isinstance(p, dict)]
+        todos = [p for p in info.get("pulses") or [] if isinstance(p, dict)]
+        # Mismo criterio que la correlación (Etapa 9): un pulse con más de 1.000 indicadores
+        # es un volcado agregado. Sus familias y tags son ruido ("Detects", "Imphash: ...")
+        # y no deben llegar ni a la UI ni al LLM como si describieran este indicador.
+        pulses = [p for p in todos if (p.get("indicator_count") or 0) <= MAX_INDICADORES_PULSE]
         cantidad = info.get("count") or 0
         familias = unicos(
             f.get("display_name") if isinstance(f, dict) else f
@@ -51,6 +56,6 @@ class OTX:
             veredicto=veredicto,
             familias=familias,
             etiquetas=unicos(t for p in pulses for t in p.get("tags") or []),
-            detecciones={"pulses": cantidad},
+            detecciones={"pulses": cantidad, "pulses_masivos": len(todos) - len(pulses)},
             referencia_url=f"https://otx.alienvault.com/indicator/{_PAGINA[tipo]}/{quote(valor, safe='')}",
         )

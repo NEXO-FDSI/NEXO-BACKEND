@@ -93,6 +93,10 @@ class Report(Base):
     indicator_id = Column(Integer, ForeignKey("indicators.id"), nullable=False)
     contenido = Column(Text, nullable=False)
     nivel_confianza = Column(Float, nullable=False)
+    # JSON (Text, como enrichment_cache.respuesta_json): severidad, concordancia, estado de
+    # las fuentes y el registro completo del análisis de IA (contexto, prompt, salida,
+    # descartes, modelo). Nullable: los informes anteriores a la Fase 4 no lo tienen.
+    metadatos = Column(Text, nullable=True)
     timestamp = Column(DateTime(timezone=True), default=_now)
 
     indicator = relationship("Indicator", back_populates="reports")

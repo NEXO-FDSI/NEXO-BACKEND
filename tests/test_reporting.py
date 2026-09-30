@@ -48,7 +48,8 @@ def test_plantilla_resuelto(db):
     assert "| T9001 | Falsa Uno | Initial Access |" in md
     assert "| T9002 | Falsa Dos | Execution |" in md
     assert "**Fuente de las técnicas:** MITRE ATT&CK" in md
-    assert md.endswith("## Estado de validación\n\nPendiente de revisión humana.\n")
+    # Fase 4 (D20): sin sección "Estado de validación"; quedaba congelada al generarse.
+    assert "## Estado de validación" not in md and "Pendiente de revisión humana." not in md
 
 
 def test_plantilla_sin_evidencia(db):
@@ -57,7 +58,6 @@ def test_plantilla_sin_evidencia(db):
     assert "### Técnicas documentadas" not in md
     assert "- Evidencia encontrada: No" in md
     assert "**Nivel de confianza:** 0.0" in md
-    assert "Pendiente de revisión humana." in md
 
 
 def test_plantilla_sin_pulse_info(db):
@@ -82,10 +82,13 @@ def test_flujo_completo(client, db, vector_store, monkeypatch):
         "T9002": {"document": "Falsa Dos (Execution)\n\nIntérpretes de comandos.",
                   "metadata": {"nombre": "Falsa Dos", "tactica": "Execution"}},
     }
+    salida = {"resumen": "Emotet se asocia por su familia de malware.",
+              "hallazgos": [{"afirmacion": "Un pulse lo vincula a Emotet.", "tipo": "evidencia",
+                             "fuentes": ["E-OTX"]}]}
     monkeypatch.setattr("app.ai_component.service.generate_analysis",
-                        lambda prompt: ("Emotet se asocia por su familia de malware.",
-                                        {"proveedor": "groq", "modelo": "qwen", "latencia_ms": 900,
-                                         "tokens": {}, "intentos_fallidos": []}))
+                        lambda prompt, validar: (validar(json.dumps(salida)),
+                                                 {"proveedor": "groq", "modelo": "qwen", "latencia_ms": 900,
+                                                  "tokens": {}, "intentos_fallidos": []}))
 
     r = client.post("/indicators", json={"tipo": "ip", "valor": "20.0.0.1"})
     assert r.status_code == 201
@@ -99,6 +102,15 @@ def test_flujo_completo(client, db, vector_store, monkeypatch):
     assert "emotet" in informe["contenido"] and "T9001" in informe["contenido"]
     assert "## Análisis\n\nEmotet se asocia por su familia de malware." in informe["contenido"]
     assert "*Redactado por IA: groq · qwen · 900 ms." in informe["contenido"]
+    assert "**Severidad:** Alta — asociado a emotet con confianza 0.9" in informe["contenido"]
+    # Metadatos: severidad, estado de cada fuente y el registro completo de la IA.
+    meta = informe["metadatos"]
+    assert meta["severidad"]["nivel"] == "alta"
+    assert {f["fuente"]: f["estado"] for f in meta["fuentes"]} == {
+        "alienvault_otx": "con_evidencia", "threatfox": "no_configurado", "virustotal": "no_configurado"}
+    assert meta["ia"]["estado"] == "generado" and meta["ia"]["proveedor"] == "groq"
+    assert [b["id"] for b in meta["ia"]["contexto"]] == ["E-COR", "E-OTX", "T9001", "T9002"]
+    assert meta["ia"]["analisis"]["hallazgos"][0]["fuentes"] == ["E-OTX"]
 
     r = client.post(f"/reports/{informe['id']}/validate",
                     json={"decision": "aceptado", "analista": "analista de prueba"})
@@ -119,6 +131,9 @@ def test_informe_sin_evidencia_tiene_confianza_cero(client, db, vector_store):
     r = client.post(f"/indicators/{ind.id}/report")
     assert r.status_code == 201
     assert r.json()["nivel_confianza"] == 0.0 and "Sin evidencia suficiente" in r.json()["contenido"]
+    ia = r.json()["metadatos"]["ia"]
+    assert ia["estado"] == "no_llamado" and "sin entidad resuelta" in ia["motivo"]
+    assert r.json()["metadatos"]["severidad"]["nivel"] == "baja"
     # Sin entidad resuelta no se consulta el vector store ni el LLM.
     assert vector_store.llamadas == []
 

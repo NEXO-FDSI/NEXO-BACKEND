@@ -7,14 +7,24 @@ clase. Se prueba el primario y, si falla, el respaldo.
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import Any
 
-from openai import OpenAI
+from openai import OpenAI, RateLimitError
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Un 429 que pide esperar hasta esto se reintenta en el mismo perfil (una vez). Medido: el
+# tier gratuito de Groq limita los tokens de salida por minuto y pide esperar ~4 s; caer al
+# respaldo local cuesta ~19 s.
+ESPERA_MAX_429 = 8.0
+# Tope de salida: un análisis JSON conciso usa ~550 tokens (medido). Groq reserva el máximo
+# posible contra su límite de tokens de salida por minuto; sin tope, la reserva ronda 940.
+MAX_TOKENS_RESPUESTA = 800
 
 
 class LLMServiceError(RuntimeError):
@@ -87,19 +97,41 @@ def embed_text(text: str) -> list[float]:
     return cliente.embeddings.create(model=settings.EMBEDDING_MODEL, input=text).data[0].embedding
 
 
-def _completar(perfil: Perfil, prompt: str):
-    extra = {"reasoning_effort": perfil.reasoning_effort} if perfil.reasoning_effort else {}
+def _espera_sugerida(exc: RateLimitError) -> float | None:
     try:
-        # reasoning_effort=none apaga el razonamiento en qwen3. Medido con qwen3:8b local:
-        # 67.5s razonando contra 19.3s sin razonar. gpt-oss en Groq no acepta "none" (400):
-        # por eso es configurable por perfil y no un valor fijo.
-        respuesta = _cliente(perfil.base_url, perfil.api_key, perfil.timeout).chat.completions.create(
-            model=perfil.modelo,
-            messages=[{"role": "user", "content": prompt}],
-            extra_body=extra,
-        )
-    except Exception as e:  # timeout, conexión rechazada, 4xx/5xx del proveedor
-        raise LLMServiceError(f"fallo del servicio de IA: {e}") from e
+        return float(exc.response.headers.get("retry-after"))
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def _completar(perfil: Perfil, prompt: str, json: bool = False):
+    extra = {"reasoning_effort": perfil.reasoning_effort} if perfil.reasoning_effort else {}
+    # json_object lo aceptan Ollama, Groq y OpenRouter; el esquema va en el prompt y se
+    # valida después (json_schema estricto solo lo soportan algunos modelos).
+    formato = {"response_format": {"type": "json_object"}} if json else {}
+    for intento in range(2):
+        try:
+            # reasoning_effort=none apaga el razonamiento en qwen3. Medido con qwen3:8b local:
+            # 67.5s razonando contra 19.3s sin razonar. gpt-oss en Groq no acepta "none" (400):
+            # por eso es configurable por perfil y no un valor fijo.
+            respuesta = _cliente(perfil.base_url, perfil.api_key, perfil.timeout).chat.completions.create(
+                model=perfil.modelo,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,  # redacción factual, no creativa
+                max_tokens=MAX_TOKENS_RESPUESTA,
+                extra_body=extra,
+                **formato,
+            )
+            break
+        except RateLimitError as e:
+            espera = _espera_sugerida(e)
+            if intento == 0 and espera is not None and espera <= ESPERA_MAX_429:
+                logger.info("IA %s: 429, se reintenta en %.1f s", perfil.proveedor, espera)
+                time.sleep(espera)
+                continue
+            raise LLMServiceError(f"fallo del servicio de IA: {e}") from e
+        except Exception as e:  # timeout, conexión rechazada, 4xx/5xx del proveedor
+            raise LLMServiceError(f"fallo del servicio de IA: {e}") from e
 
     texto = (respuesta.choices[0].message.content or "").strip()
     if not texto:
@@ -107,18 +139,25 @@ def _completar(perfil: Perfil, prompt: str):
     return texto, respuesta.usage
 
 
-def generate_analysis(prompt: str) -> tuple[str, dict]:
-    """Redacta el análisis con el primer perfil que responda.
+def generate_analysis(prompt: str, validar: Callable[[str], Any] | None = None) -> tuple[Any, dict]:
+    """Redacta el análisis con el primer perfil que responda (y cuya respuesta sea válida).
 
-    Devuelve (texto, meta) con proveedor, modelo, latencia, tokens e intentos fallidos.
-    Levanta LLMServiceError si ninguno respondió. Nunca devuelve un string vacío
-    disfrazado de éxito.
+    Con `validar`, se pide JSON y la respuesta pasa por esa función: si levanta ValueError
+    (JSON roto, esquema incumplido) cuenta como fallo del perfil y se prueba el siguiente.
+    Devuelve (resultado, meta) con proveedor, modelo, latencia, tokens e intentos fallidos.
+    Levanta LLMServiceError si ninguno sirvió. Nunca devuelve un string vacío disfrazado
+    de éxito.
     """
     intentos: list[dict] = []
     for perfil in perfiles():
         inicio = time.perf_counter()
         try:
-            texto, usage = _completar(perfil, prompt)
+            texto, usage = _completar(perfil, prompt, json=validar is not None)
+            if validar is not None:
+                try:
+                    texto = validar(texto)
+                except ValueError as exc:
+                    raise LLMServiceError(f"respuesta con formato inválido: {str(exc)[:200]}") from exc
         except LLMServiceError as exc:
             logger.warning("IA %s (%s) falló: %s", perfil.proveedor, perfil.modelo, exc)
             intentos.append({"proveedor": perfil.proveedor, "modelo": perfil.modelo, "error": str(exc)})
