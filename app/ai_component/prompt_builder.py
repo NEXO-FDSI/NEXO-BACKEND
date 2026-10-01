@@ -66,12 +66,20 @@ def _cuerpo(document: str) -> str:
     return descripcion[:MAX_CHARS_DESC].rstrip() + "…"
 
 
-def seleccionar_tecnicas(tecnicas: list[dict], maximo: int = MAX_TECNICAS) -> list[dict]:
-    """Hasta `maximo` técnicas repartidas entre tácticas (round-robin, determinístico).
+def seleccionar_tecnicas(
+    tecnicas: list[dict], maximo: int = MAX_TECNICAS, puntajes: dict[str, float] | None = None
+) -> list[dict]:
+    """Hasta `maximo` técnicas de la entidad para el contexto del modelo.
 
-    Tomar las primeras en orden STIX podía llenar el contexto con 8 técnicas de la misma
-    táctica. ponytail: las tácticas se recorren en orden de aparición, no de kill chain.
+    Con `puntajes` (similitud semántica con la evidencia del indicador): las más afines
+    primero; un empate conserva el orden STIX. Solo se ordenan técnicas de la entidad: la
+    similitud nunca trae una técnica que la etapa (b) no haya recuperado.
+    Sin puntajes: repartidas entre tácticas (round-robin, determinístico); tomar las
+    primeras en orden STIX podía llenar el contexto con técnicas de una sola táctica.
+    ponytail: las tácticas se recorren en orden de aparición, no de kill chain.
     """
+    if puntajes:
+        return sorted(tecnicas, key=lambda t: -puntajes.get(t["id"], float("-inf")))[:maximo]
     por_tactica: dict[str, list[dict]] = {}
     for t in tecnicas:
         por_tactica.setdefault(t["tactica"], []).append(t)
@@ -90,6 +98,7 @@ def construir_contexto(
     technique_texts: dict[str, dict],
     fuentes: list[dict] = (),
     contradicciones: list[dict] = (),
+    puntajes: dict[str, float] | None = None,
 ) -> dict:
     """{bloques: [{id, titulo, texto}], sin_datos: [...], tecnicas_totales, tecnicas_mostradas}.
 
@@ -125,7 +134,7 @@ def construir_contexto(
 
     # Se omiten las técnicas sin texto recuperado: no se le pide al modelo hablar de ellas.
     disponibles = [t for t in correlation_result["tecnicas"] if t["id"] in technique_texts]
-    for t in seleccionar_tecnicas(disponibles):
+    for t in seleccionar_tecnicas(disponibles, puntajes=puntajes):
         meta = technique_texts[t["id"]].get("metadata") or {}
         bloques.append({
             "id": t["id"],

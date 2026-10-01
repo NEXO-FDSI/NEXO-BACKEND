@@ -85,6 +85,24 @@ UI lo explica en la pestaña de OTX en vez de decir "no tiene registros".
   **Nivel de confianza + motivos** y columna **Procedencia** en las técnicas.
 - `metadatos` suma `confianza`, `contradicciones` y `cobertura` (JSON, sin migración).
 
+### Selección semántica de técnicas para la IA
+
+Hasta aquí el "RAG" recuperaba el texto de ATT&CK por ID (`get_by_ids`) y elegía las
+técnicas del contexto repartiéndolas por táctica: los embeddings sembrados en Chroma no se
+consultaban. Ahora, al generar el informe, se calcula el embedding de una consulta que
+describe la evidencia del indicador (tipo, entidad, familias y etiquetas de las fuentes con
+evidencia) y se ordenan las técnicas **de la entidad** por similitud coseno con los
+embeddings sembrados. Las `MAX_TECNICAS` más afines van al contexto. La similitud solo
+ordena: nunca agrega una técnica que la etapa (b) no haya recuperado.
+
+Si el endpoint de embeddings (Ollama local) falla o tarda más de 10 s, se vuelve al reparto
+por táctica y el informe se genera igual. `metadatos.ia.seleccion` guarda método, consulta,
+motivo y puntajes; la UI lo muestra en "Contexto enviado al modelo".
+
+Medido con datos reales (IP de C2 de AsyncRAT, 20 técnicas): la selección semántica prioriza
+Multi-hop Proxy, Dynamic Resolution, DGA e Ingress Tool Transfer (Command and Control); el
+reparto por táctica incluía Video Capture y Debugger Evasion.
+
 ## API
 
 Sin endpoints nuevos: la evidencia normalizada ya viaja en `fuentes[]` de `/enrich`,

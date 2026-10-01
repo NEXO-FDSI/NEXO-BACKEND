@@ -83,8 +83,9 @@ def _cliente(base_url: str, api_key: str, timeout: float) -> OpenAI:
     return OpenAI(base_url=base_url, api_key=api_key, timeout=timeout, max_retries=0)
 
 
-def embed_text(text: str) -> list[float]:
-    """Embedding de un texto. Sin envoltura: si la siembra falla, que falle ruidosa.
+def embed_text(text: str, timeout: float | None = None) -> list[float]:
+    """Embedding de un texto. Sin envoltura: el que llama decide qué hacer si falla (la
+    siembra falla ruidosa; el informe vuelve a la selección por táctica).
 
     Usa su propio endpoint (EMBEDDING_BASE_URL): apuntar el chat a Groq, que no ofrece
     embeddings, no debe romper la siembra.
@@ -92,7 +93,7 @@ def embed_text(text: str) -> list[float]:
     cliente = _cliente(
         settings.EMBEDDING_BASE_URL,
         settings.EMBEDDING_API_KEY.get_secret_value(),
-        settings.LLM_TIMEOUT,
+        timeout or settings.LLM_TIMEOUT,
     )
     return cliente.embeddings.create(model=settings.EMBEDDING_MODEL, input=text).data[0].embedding
 

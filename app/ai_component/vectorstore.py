@@ -23,7 +23,8 @@ class VectorStore(Protocol):
     ) -> None: ...
 
     def get_by_ids(self, ids: list[str]) -> dict[str, dict]:
-        """{id: {"document": str, "metadata": dict}} solo para los ids que existan.
+        """{id: {"document": str, "metadata": dict, "embedding": list[float]}} solo para los
+        ids que existan.
 
         Los ids no encontrados se omiten del resultado, sin lanzar excepción.
         """
@@ -52,12 +53,12 @@ class ChromaVectorStore:
     def get_by_ids(self, ids: list[str]) -> dict[str, dict]:
         if not ids:
             return {}
-        # collection.get() ya omite por sí solo los ids inexistentes, y su include por
-        # defecto trae documents + metadatas.
-        resultado = self._coleccion.get(ids=ids)
+        # collection.get() ya omite por sí solo los ids inexistentes. Los embeddings no vienen
+        # por defecto: se piden para ordenar las técnicas por afinidad con la evidencia.
+        resultado = self._coleccion.get(ids=ids, include=["documents", "metadatas", "embeddings"])
         return {
-            tid: {"document": doc, "metadata": meta or {}}
-            for tid, doc, meta in zip(
-                resultado["ids"], resultado["documents"], resultado["metadatas"]
+            tid: {"document": doc, "metadata": meta or {}, "embedding": [float(x) for x in emb]}
+            for tid, doc, meta, emb in zip(
+                resultado["ids"], resultado["documents"], resultado["metadatas"], resultado["embeddings"]
             )
         }

@@ -25,8 +25,9 @@ Grupo 2, Escuela Colombiana de Ingeniería Julio Garavito. El frontend
   proveedor es un **perfil de configuración** (`LLM_*` primario,
   `LLM_FALLBACK_*` respaldo), no una clase: hoy Groq
   (`qwen/qwen3.8-27b`) con respaldo en Ollama local (`qwen3:8b`).
-  Embeddings `nomic-embed-text` con endpoint propio (`EMBEDDING_BASE_URL`,
-  solo para sembrar); vector store Chroma persistido en `data/chroma/`.
+  Embeddings `nomic-embed-text` con endpoint propio (`EMBEDDING_BASE_URL`):
+  se siembran en Chroma (`data/chroma/`) y, al generar el informe, se
+  calcula el de una consulta para ordenar las técnicas de la entidad.
 
 ## Comandos
 
@@ -150,7 +151,14 @@ agregado atribuía un hash de WannaCry a Cobalt Strike con 0.9.
 El componente de IA (`app/ai_component/service.py`) replica ese corte: no
 llama al LLM si no hay entidad resuelta ni si el vector store no devuelve
 textos, y si el LLM falla el informe se genera igual (el resto es
-determinístico).
+determinístico). Las técnicas que ve el modelo (hasta `MAX_TECNICAS`) son
+las de la entidad más afines a la evidencia del indicador: similitud coseno
+entre el embedding de una consulta (tipo, entidad, familias y etiquetas de
+las fuentes) y los sembrados en Chroma. Solo se ordenan técnicas de la
+entidad: la similitud nunca trae técnicas nuevas. Si el endpoint de
+embeddings no responde (10 s), vuelve al reparto por táctica; queda en
+`metadatos.ia.seleccion`. En tests, `conftest.py` hace fallar
+`app.ai_component.service.embed_text`.
 
 ### Convenciones que no son obvias
 
