@@ -12,7 +12,7 @@ from app.db.models import EntityTechniqueLink, Indicator, Technique
 from app.db.repositories import entity_repository, indicator_entity_link_repository
 from app.db.repositories.entity import get_by_nombre
 from app.db.repositories.entity_technique_link import technique_ids_enlazadas
-from app.db.repositories.indicator_entity_link import get_by_indicator, get_by_indicator_and_entity
+from app.db.repositories.indicator_entity_link import get_by_indicator_and_entity
 from app.db.repositories.technique import ids_existentes
 
 FUENTE_ATTCK = "MITRE ATT&CK STIX dataset — relationship 'uses'"
@@ -132,9 +132,7 @@ def _tecnicas_de(nombre: str, index: AttckIndex) -> list[dict]:
     ]
 
 
-def correlation_snapshot(
-    db: Session, indicator: Indicator, detalle: dict, index: AttckIndex
-) -> dict | None:
+def correlation_from_link(link, detalle: dict, index: AttckIndex) -> dict | None:
     """Lo que devolvió (o devolvería) /correlate, SIN escribir nada: para reconstruir una
     investigación con GET. None si la correlación aún no se ejecutó.
 
@@ -143,7 +141,6 @@ def correlation_snapshot(
     etapa (a) no resuelve, /correlate daría "sin asociación"; si resuelve, es que todavía
     no se ejecutó (al ejecutarse habría creado el link).
     """
-    link = get_by_indicator(db, indicator.id)
     if link is None:
         return _sin_asociacion() if resolve_entity_from_enrichment(detalle, index) is None else None
     entity = link.entity

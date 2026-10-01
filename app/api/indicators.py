@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -5,21 +7,19 @@ from sqlalchemy.orm import Session
 from app.ai_component.vectorstore import VectorStore
 from app.api.correlation import get_attck_index
 from app.correlation.attck_loader import AttckIndex
-from app.correlation.service import correlation_snapshot
 from app.db.database import get_db
 from app.db.repositories import indicator_repository
-from app.db.repositories.human_validation import list_by_reports
-from app.db.repositories.indicator import get_by_valor, list_recientes
-from app.db.repositories.report import list_by_indicator
-from app.enrichment.service import FUENTE, detalle_otx, get_or_fetch_enrichment
+from app.db.repositories.indicator import eliminar_en_cascada, get_by_valor, list_recientes
+from app.enrichment.service import detalle_otx
 from app.normalization.normalizer import normalize_indicator
+from app.reporting.investigaciones import construir
 from app.reporting.service import generate_report
-from app.schemas.human_validation import HumanValidationRead
 from app.schemas.indicator import IndicatorCreate, IndicatorRead, IndicatorTipo
 from app.schemas.report import ReportRead
 
 # Tags por endpoint y no en el router: FastAPI los concatena, y el informe va en Reports.
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def get_vector_store(request: Request) -> VectorStore:
@@ -105,27 +105,35 @@ def get_investigation(
             status_code=status.HTTP_404_NOT_FOUND, detail="Indicador no encontrado"
         )
 
-    detalle = detalle_otx(db, indicator)  # None = /enrich nunca terminó para este indicador
-    enrichment = correlation = None
-    if detalle is not None:
-        enrichment = {
-            "indicator_id": indicator_id,
-            "fuente": FUENTE,
-            **get_or_fetch_enrichment(db, indicator, consultar=False),
-        }
-        snapshot = correlation_snapshot(db, indicator, detalle, index)
-        correlation = {"indicator_id": indicator_id, **snapshot} if snapshot else None
+    [snapshot] = construir(db, [indicator], index, detalle_completo=True)
+    return snapshot
 
-    reports = list_by_indicator(db, indicator_id)
-    return {
-        "indicator": IndicatorRead.model_validate(indicator),
-        "enrichment": enrichment,
-        "correlation": correlation,
-        "reports": [ReportRead.model_validate(r) for r in reports],
-        "validations": [
-            HumanValidationRead.model_validate(v) for v in list_by_reports(db, [r.id for r in reports])
-        ],
-    }
+
+@router.delete(
+    "/indicators/{indicator_id}",
+    tags=["Indicators"],
+    summary="Eliminar un indicador y todo su rastro",
+    description=(
+        "Eliminación **irreversible y en cascada**, en una sola transacción: validaciones de sus "
+        "informes, informes (todas las versiones), links de entidad, caché de todas las fuentes "
+        "y el indicador. Las entidades y sus links a técnicas se borran solo si ningún otro "
+        "indicador las usa; el catálogo de técnicas ATT&CK no se toca. Devuelve cuántas filas "
+        "se borraron por tabla. **404** si el indicador no existe. Después, el mismo valor se "
+        "puede volver a registrar."
+    ),
+)
+def delete_indicator(indicator_id: int, db: Session = Depends(get_db)):
+    indicator = indicator_repository.get(db, indicator_id)
+    if indicator is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Indicador no encontrado"
+        )
+    valor = indicator.valor
+    eliminados = eliminar_en_cascada(db, indicator)
+    db.commit()
+    # Se pierde el historial de validación: queda constancia en el log del servidor.
+    logger.warning("indicador #%d (%s) eliminado en cascada: %s", indicator_id, valor, eliminados)
+    return {"indicator_id": indicator_id, "valor": valor, "eliminados": eliminados}
 
 
 @router.post(

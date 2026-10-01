@@ -38,13 +38,25 @@ def detalle_otx(db: Session, indicator: Indicator) -> dict | None:
     return json.loads(cacheado.respuesta_json) if cacheado else None
 
 
+def _de_cache(db: Session, indicator: Indicator, fuente: str, cache: dict[str, dict] | None) -> dict | None:
+    if cache is not None:
+        return cache.get(fuente)
+    cacheado = get_by_indicator_and_source(db, indicator.id, fuente)
+    return json.loads(cacheado.respuesta_json) if cacheado else None
+
+
 def _cronometrar(proveedor: Proveedor, tipo: str, valor: str) -> tuple[dict, int]:
     inicio = time.perf_counter()
     crudo = proveedor.consultar(tipo, valor)
     return crudo, round((time.perf_counter() - inicio) * 1000)
 
 
-def get_or_fetch_enrichment(db: Session, indicator: Indicator, consultar: bool = True) -> dict:
+def get_or_fetch_enrichment(
+    db: Session,
+    indicator: Indicator,
+    consultar: bool = True,
+    cache: dict[str, dict] | None = None,
+) -> dict:
     """Consulta cada fuente (de caché si existe; en paralelo si no) y resume su resultado.
 
     Devuelve {tiene_evidencia, detalle, fuentes}: los dos primeros son de OTX, como
@@ -53,6 +65,8 @@ def get_or_fetch_enrichment(db: Session, indicator: Indicator, consultar: bool =
 
     consultar=False: solo caché, cero HTTP (lo usa el informe). Una fuente configurada sin
     caché queda "no_disponible": falló o alcanzó su cuota cuando se ejecutó /enrich.
+    cache: respuestas crudas ya leídas por fuente ({fuente_api: crudo}); evita una consulta
+    por fuente cuando se arman muchas investigaciones en lote.
     """
     tipo, valor = indicator.tipo, indicator.valor
     entradas: dict[str, dict] = {}
@@ -71,8 +85,8 @@ def get_or_fetch_enrichment(db: Session, indicator: Indicator, consultar: bool =
             entrada["estado"] = "no_soportado"
         elif es_ip_no_publica(indicator):
             entrada.update(estado="omitido", error=OMITIDO)
-        elif cacheado := get_by_indicator_and_source(db, indicator.id, p.nombre):
-            crudos[p.nombre] = json.loads(cacheado.respuesta_json)  # cero HTTP
+        elif (crudo := _de_cache(db, indicator, p.nombre, cache)) is not None:
+            crudos[p.nombre] = crudo  # cero HTTP
             entrada["desde_cache"] = True
         elif consultar:
             pendientes[p.nombre] = p

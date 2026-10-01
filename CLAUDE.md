@@ -94,11 +94,21 @@ Flujo del pipeline, un endpoint por paso (cada uno exige el anterior):
 5. `POST /reports/{id}/validate` — validación humana; cada decisión es
    una fila nueva (historial auditable).
 
+Eliminación: `DELETE /indicators/{id}` borra en cascada, en una transacción
+y desde la aplicación (las FK no tienen `ON DELETE CASCADE`):
+`human_validation` → `reports` → `indicator_entity_link` →
+`enrichment_cache` → `indicators`, y luego las entidades que quedan
+huérfanas con sus `entity_technique_link`. El catálogo `techniques` nunca
+se toca. Devuelve filas borradas por tabla y deja un WARNING en el log.
+
 Consultas de solo lectura (no escriben ni salen a la red): `GET /indicators`
-(recientes, o búsqueda por `tipo` + `valor` normalizado) y
-`GET /indicators/{id}` (indicador, enriquecimiento desde la caché,
-correlación reconstruida con `correlation_snapshot`, informes y
-validaciones). La correlación sin link de la etapa (a) se deduce de forma
+(recientes, o búsqueda por `tipo` + `valor` normalizado),
+`GET /indicators/{id}` (investigación completa) y `GET /investigations`
+(todas, paginadas de a 10 como máximo, con el OTX recortado). Ambas se
+arman en `app/reporting/investigaciones.py::construir`: una consulta por
+tabla para toda la página (no por indicador). Ojo: el identity map de
+SQLAlchemy es débil; las entidades precargadas se mantienen referenciadas
+mientras se construye, o cada `link.entity` volvería a consultar. La correlación sin link de la etapa (a) se deduce de forma
 determinística: "sin asociación" si la etapa (a) no resuelve, `null` si
 resolvería pero `/correlate` aún no se ejecutó.
 

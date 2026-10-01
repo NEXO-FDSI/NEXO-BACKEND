@@ -141,3 +141,74 @@ def test_get_no_escribe_nada(client, db, monkeypatch, ia):
     finally:
         event.remove(db.bind, "before_cursor_execute", escucha)
     assert sentencias and set(sentencias) <= {"SELECT", "SAVEPOINT", "RELEASE", "ROLLBACK"}, sentencias
+
+
+# --- GET /investigations (paginado) ---
+
+
+def test_pagina_de_a_10_del_mas_reciente_al_mas_antiguo(client):
+    ids = [_registrar(client, "ip", f"50.0.0.{n}") for n in range(12)]
+    r = client.get("/investigations")
+    assert r.status_code == 200
+    cuerpo = r.json()
+    assert (cuerpo["page"], cuerpo["size"], cuerpo["total"], cuerpo["pages"]) == (1, 10, 12, 2)
+    assert [i["indicator"]["id"] for i in cuerpo["items"]] == ids[::-1][:10]
+
+    segunda = client.get("/investigations", params={"page": 2}).json()
+    assert [i["indicator"]["id"] for i in segunda["items"]] == ids[1::-1]
+    assert client.get("/investigations", params={"page": 3}).json()["items"] == []
+
+
+@pytest.mark.parametrize("params", [{"size": 11}, {"size": 0}, {"page": 0}])
+def test_limites_de_paginacion_son_422(client, params):
+    assert client.get("/investigations", params=params).status_code == 422
+
+
+def test_cada_item_es_la_investigacion_con_otx_recortado(client, monkeypatch, ia):
+    crudo = _otx("Emotet")
+    crudo["pulse_info"]["pulses"][0]["description"] = "texto largo que no viaja en el listado"
+    crudo["sections"] = ["general", "geo"]
+    monkeypatch.setattr(OTX_MOCK, lambda tipo, valor, key: crudo)
+    ind_id = _registrar(client, "ip", "51.0.0.1")
+    client.post(f"/indicators/{ind_id}/enrich")
+    client.post(f"/indicators/{ind_id}/report")
+
+    [item] = client.get("/investigations").json()["items"]
+    completo = client.get(f"/indicators/{ind_id}").json()
+    assert completo["enrichment"]["detalle_completo"] is True
+    assert completo["enrichment"]["detalle"] == crudo
+    assert item["enrichment"]["detalle_completo"] is False
+    assert "sections" not in item["enrichment"]["detalle"]
+    assert "description" not in item["enrichment"]["detalle"]["pulse_info"]["pulses"][0]
+    assert item["enrichment"]["detalle"]["pulse_info"]["pulses"][0]["malware_families"] == [{"display_name": "Emotet"}]
+    # Todo lo demás es idéntico a la investigación completa.
+    for campo in ("indicator", "correlation", "reports", "validations"):
+        assert item[campo] == completo[campo], campo
+    sin_detalle = lambda e: {k: v for k, v in e.items() if k not in ("detalle", "detalle_completo")}  # noqa: E731
+    assert sin_detalle(item["enrichment"]) == sin_detalle(completo["enrichment"])
+
+
+def test_consultas_constantes_sin_importar_el_tamano_de_la_pagina(client, db, monkeypatch, ia):
+    # Entidades distintas: con una sola, una carga perezosa por link pasaría desapercibida.
+    familias = ["Emotet", "apt-falso", "Ambigua"]
+    for n in range(10):
+        monkeypatch.setattr(OTX_MOCK, lambda tipo, valor, key, f=familias[n % 3]: _otx(f))
+        ind_id = _registrar(client, "ip", f"52.0.0.{n}")
+        client.post(f"/indicators/{ind_id}/enrich")
+        client.post(f"/indicators/{ind_id}/report")
+
+    def consultas(size):
+        # En producción cada request trae una sesión nueva; aquí se comparte, así que se vacía
+        # el identity map para medir como en producción.
+        db.expunge_all()
+        sentencias = []
+        escucha = lambda *a, **k: sentencias.append(1)  # noqa: E731
+        event.listen(db.bind, "before_cursor_execute", escucha)
+        try:
+            assert len(client.get("/investigations", params={"size": size}).json()["items"]) == size
+        finally:
+            event.remove(db.bind, "before_cursor_execute", escucha)
+        return len(sentencias)
+
+    una, diez = consultas(1), consultas(10)
+    assert diez == una, f"{diez} consultas para 10 investigaciones vs {una} para 1"

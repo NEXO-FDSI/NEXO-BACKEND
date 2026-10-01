@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.ai_component.vectorstore import ChromaVectorStore
-from app.api import correlation, enrichment, indicators, reports
+from app.api import correlation, enrichment, indicators, investigations, reports
 from app.enrichment.providers import PROVEEDORES
 from app.correlation.attck_loader import load_attck_index
 from app.core.config import settings
@@ -43,6 +43,7 @@ TAGS = [
     {"name": "Enrichment", "description": "Reputación del indicador en OTX, ThreatFox y VirusTotal."},
     {"name": "Correlation", "description": "Cadena de dos etapas contra MITRE ATT&CK."},
     {"name": "Reports", "description": "Informe del indicador y validación humana."},
+    {"name": "Investigations", "description": "Todas las investigaciones de la plataforma, paginadas."},
     {"name": "Health", "description": "Estado del servicio."},
 ]
 
@@ -101,6 +102,7 @@ app.include_router(indicators.router)
 app.include_router(enrichment.router)
 app.include_router(correlation.router)
 app.include_router(reports.router)
+app.include_router(investigations.router)
 
 
 @app.get("/health", tags=["Health"], summary="Estado del servicio")
