@@ -279,11 +279,15 @@ def test_fallo_de_threatfox_es_error_nunca_sin_evidencia(db, fuentes):
     assert f["threatfox"]["estado"] == "error" and f["threatfox"]["resumen"] is None
 
 
-def test_fallo_de_otx_sigue_siendo_502_pero_guarda_las_demas_fuentes(client, db, fuentes):
+def test_fallo_de_otx_no_tumba_el_enriquecimiento_si_otra_fuente_responde(client, db, fuentes):
+    """OTX ya no es obligatoria: queda en "error" (nunca "sin evidencia") y las demás siguen."""
     fuentes.otx = ReputationAPIError("fallo de red consultando OTX: timeout")
     ind = _ind(db)
     r = client.post(f"/indicators/{ind.id}/enrich")
-    assert r.status_code == 502 and "timeout" in r.json()["detail"]
+    assert r.status_code == 200
+    f = _por_fuente(r.json())
+    assert f[FUENTE]["estado"] == "error" and "timeout" in f[FUENTE]["error"]
+    assert r.json()["tiene_evidencia"] is True and r.json()["cobertura"] == "parcial"
     assert get_by_indicator_and_source(db, ind.id, FUENTE) is None
     assert get_by_indicator_and_source(db, ind.id, "virustotal") is not None
 

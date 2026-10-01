@@ -32,6 +32,11 @@ RESUELTO = {
         {"id": "T9002", "nombre": "Falsa Dos", "tactica": "Execution"},
     ],
 }
+OTX_CON_EVIDENCIA = {
+    "fuente": FUENTE, "etiqueta": "AlienVault OTX", "estado": "con_evidencia", "error": None,
+    "resumen": {"tiene_evidencia": True, "veredicto": "malicioso", "familias": ["Emotet"], "etiquetas": [],
+                "detecciones": {"pulses": 1, "pulses_masivos": 0}, "confianza": None},
+}
 SIN_EVIDENCIA = {"resuelto": False, "entity": None, "confianza": None, "evidencia": None, "tecnicas": []}
 
 
@@ -39,13 +44,13 @@ SIN_EVIDENCIA = {"resuelto": False, "entity": None, "confianza": None, "evidenci
 
 
 def test_plantilla_resuelto(db):
-    md = build_report_content(_indicador(db), _detalle(familias=["Emotet"]), RESUELTO)
+    md = build_report_content(_indicador(db), RESUELTO, fuentes=[OTX_CON_EVIDENCIA])
     assert md.startswith("# Informe de indicador: 10.0.0.1\n")
-    assert "**Tipo:** ip" in md and "**Nivel de confianza:** 0.9" in md
+    assert "**Tipo:** ip" in md and "**Confianza de la asociación:** 0.9" in md
     # Salto duro de Markdown entre campos de la cabecera: si no, se renderizan en una línea.
     assert "**Tipo:** ip  \n**Fecha de generación:**" in md
-    assert "- Evidencia encontrada: Sí" in md
-    assert "- Reportes (pulses) que mencionan este indicador: 1" in md
+    assert "- Evidencia encontrada: Sí, en AlienVault OTX" in md
+    assert "| AlienVault OTX | con evidencia | veredicto de la fuente: malicioso; 1 pulse(s)" in md
     assert "- **Entidad asociada:** emotet (malware)" in md
     assert "| T9001 | Falsa Uno | Initial Access |" in md
     assert "| T9002 | Falsa Dos | Execution |" in md
@@ -55,16 +60,10 @@ def test_plantilla_resuelto(db):
 
 
 def test_plantilla_sin_evidencia(db):
-    md = build_report_content(_indicador(db), {"pulse_info": {"count": 0, "pulses": []}}, SIN_EVIDENCIA)
+    md = build_report_content(_indicador(db), SIN_EVIDENCIA)
     assert "Sin evidencia suficiente" in md
     assert "### Técnicas documentadas" not in md
     assert "- Evidencia encontrada: No" in md
-    assert "**Nivel de confianza:** 0.0" in md
-
-
-def test_plantilla_sin_pulse_info(db):
-    md = build_report_content(_indicador(db), {}, SIN_EVIDENCIA)
-    assert "- Reportes (pulses) que mencionan este indicador: 0" in md
 
 
 def test_nivel_confianza():

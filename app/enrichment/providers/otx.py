@@ -5,7 +5,7 @@ from urllib.parse import quote
 from app.core.config import settings
 from app.correlation.service import MAX_INDICADORES_PULSE
 from app.enrichment import client  # el módulo, no el símbolo: así el patch de los tests aplica
-from app.enrichment.providers.base import resumen, unicos
+from app.enrichment.providers.base import resumen, tecnicas, unicos, urls
 
 # Sección de la página web de OTX (distinta de la sección de la API).
 _PAGINA = {"ip": "ip", "domain": "domain", "hash": "file", "url": "url"}
@@ -57,5 +57,9 @@ class OTX:
             familias=familias,
             etiquetas=unicos(t for p in pulses for t in p.get("tags") or []),
             detecciones={"pulses": cantidad, "pulses_masivos": len(todos) - len(pulses)},
+            tecnicas_attck=tecnicas(
+                a.get("id") if isinstance(a, dict) else a for p in pulses for a in p.get("attack_ids") or []
+            ),
+            referencias=urls(r for p in pulses for r in p.get("references") or []),
             referencia_url=f"https://otx.alienvault.com/indicator/{_PAGINA[tipo]}/{quote(valor, safe='')}",
         )

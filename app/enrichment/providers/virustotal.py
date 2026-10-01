@@ -7,11 +7,13 @@ from urllib.parse import quote
 
 from app.core.config import settings
 from app.enrichment.client import ReputationAPIError
-from app.enrichment.providers.base import resumen, solicitar, unicos
+from app.enrichment.providers.base import CuotaExcedida, Ventana, resumen, solicitar, unicos
 
 _API = "https://www.virustotal.com/api/v3"
 _GUI = "https://www.virustotal.com/gui"
 UMBRAL_MALICIOSO = 5  # ponytail: motores que marcan malicioso para decir "malicioso"; perilla
+# Cuota de la API pública: 4 consultas/min. Se respeta antes de llamar, no esperando un 429.
+CUPO = Ventana(maximo=4, segundos=60)
 
 
 def _ruta(tipo: str, valor: str) -> str:
@@ -45,6 +47,8 @@ class VirusTotal:
         return tipo in self.tipos
 
     def consultar(self, tipo: str, valor: str) -> dict:
+        if not CUPO.tomar():
+            raise CuotaExcedida("cuota de VirusTotal agotada en NEXO (4 consultas/min): no se consultó")
         r = solicitar(
             "GET", f"{_API}/{_ruta(tipo, valor)}", self.etiqueta,
             headers={"x-apikey": settings.VIRUSTOTAL_API_KEY.get_secret_value()},

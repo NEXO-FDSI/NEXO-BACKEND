@@ -4,7 +4,7 @@ from urllib.parse import quote
 
 from app.core.config import settings
 from app.enrichment.client import ReputationAPIError
-from app.enrichment.providers.base import resumen, solicitar, unicos
+from app.enrichment.providers.base import resumen, solicitar, unicos, urls
 
 _URL = "https://threatfox-api.abuse.ch/api/v1/"
 
@@ -64,5 +64,6 @@ class ThreatFox:
             confianza=confianza,
             primera_vez=vistos[0] if vistos else None,
             ultima_vez=vistos[-1] if vistos else None,
+            referencias=urls(i.get("reference") for i in iocs),
             referencia_url=f"https://threatfox.abuse.ch/browse.php?search=ioc%3A{quote(valor, safe='')}",
         )

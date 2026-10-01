@@ -77,15 +77,20 @@ Flujo del pipeline, un endpoint por paso (cada uno exige el anterior):
    (formato inválido → 422); duplicado → 409 por la restricción única.
 2. `POST /indicators/{id}/enrich` — consulta en paralelo las fuentes de
    `app/enrichment/providers/` (OTX, ThreatFox, VirusTotal) y guarda cada
-   respuesta en `enrichment_cache` (una fila por `fuente_api`). OTX es
-   obligatoria: si falla → 502, nunca un 200 "sin evidencia" (las demás
-   fuentes que respondieron se guardan igual). Las otras fuentes informan su
-   `estado` en `fuentes[]`. Las IPs no públicas no se envían a terceros.
+   respuesta en `enrichment_cache` (una fila por `fuente_api`). Ninguna
+   fuente es obligatoria: cada una informa su `estado` y su evidencia
+   normalizada (`resumen`) en `fuentes[]`; `tiene_evidencia` es combinado y
+   `cobertura` es `parcial` si alguna falló. Solo si fallan **todas** las
+   consultadas → 502, nunca un 200 "sin evidencia". VirusTotal tiene un cupo
+   local de 4 consultas/min (`providers/virustotal.py::CUPO`): sin cupo queda
+   `limite_cuota` sin llamar. Las IPs no públicas no se envían a terceros.
 3. `POST /indicators/{id}/correlate` — correlación determinística contra
-   el índice ATT&CK a partir del enriquecimiento cacheado (400 si no
-   existe).
-4. `POST /indicators/{id}/report` — correlación + severidad y concordancia
-   entre fuentes (determinísticas, `app/reporting/severity.py`) + análisis
+   el índice ATT&CK a partir del enriquecimiento cacheado de las tres
+   fuentes (400 si ninguna respondió todavía). La entidad y cada técnica
+   llevan su procedencia (`fuentes`, `reportada_por`).
+4. `POST /indicators/{id}/report` — correlación + severidad, concordancia,
+   contradicciones y nivel de confianza (determinísticos,
+   `app/reporting/severity.py`; la regla está en `calcular_confianza`) + análisis
    del LLM en JSON sobre un contexto con IDs citables (`E-COR`, `E-OTX`,
    `E-TF`, `E-VT`, `T####`). La salida se valida y se depura
    (`app/ai_component/schema.py`): lo que cite fuera del contexto se
@@ -104,8 +109,9 @@ se toca. Devuelve filas borradas por tabla y deja un WARNING en el log.
 Consultas de solo lectura (no escriben ni salen a la red): `GET /indicators`
 (recientes, o búsqueda por `tipo` + `valor` normalizado),
 `GET /indicators/{id}` (investigación completa) y `GET /investigations`
-(todas, paginadas de a 10 como máximo). El `detalle` de OTX sale siempre recortado
-(`recortar_otx`) en `/enrich` y en las consultas; la respuesta cruda solo queda en
+(todas, paginadas de a 10 como máximo). Ninguna respuesta cruda sale de la API:
+el `detalle` de OTX sale recortado (`recortar_otx`) y cada fuente como evidencia
+normalizada (`fuentes[].resumen`); la cruda solo queda en
 `enrichment_cache.respuesta_json`. Ambas se
 arman en `app/reporting/investigaciones.py::construir`: una consulta por
 tabla para toda la página (no por indicador). Ojo: el identity map de
@@ -125,12 +131,17 @@ un detalle de implementación:
    sustento.
 
 Reglas de la etapa (a), en `app/correlation/service.py`:
-- Candidatos: solo `malware_families` (0.9) y luego `tags` (0.6); nunca
-  el `name` del pulse.
+- Combina las tres fuentes. Candidatos: familias (0.9: OTX
+  `malware_families`, ThreatFox `malware_printable`, VirusTotal
+  `popular_threat_name`) y luego etiquetas (0.6); nunca el `name` del pulse.
+- OTX vota una vez por pulse; ThreatFox y VirusTotal, una vez cada una y
+  solo con `con_evidencia`.
 - Se ignoran los pulses con más de `MAX_INDICADORES_PULSE` (1.000)
   indicadores: son volcados agregados.
-- Dentro de cada nivel gana la entidad respaldada por más pulses
-  distintos.
+- Dentro de cada nivel gana la entidad respaldada por más fuentes
+  distintas; desempate por más votos (pulses), luego orden de aparición.
+- Los IDs ATT&CK que trae una fuente (OTX `attack_ids`) solo corroboran
+  técnicas de la entidad (`reportada_por`); nunca agregan técnicas.
 
 La razón (hallazgo de la Etapa 9 con datos reales de OTX): un solo volcado
 agregado atribuía un hash de WannaCry a Cobalt Strike con 0.9.
@@ -150,7 +161,8 @@ determinístico).
   índice sintético (técnicas `T900x`) y un `FakeVectorStore`.
 - Un fixture autouse (`sin_fuentes_reales`) deja ThreatFox y VirusTotal
   "no configuradas" en tests aunque el `.env` tenga claves, y hace fallar
-  cualquier HTTP real de las fuentes. Agregar una fuente = un archivo en
+  cualquier HTTP real de las fuentes; también renueva el cupo de VirusTotal
+  por test. Agregar una fuente = un archivo en
   `app/enrichment/providers/` que cumpla `Proveedor` + una línea en
   `PROVEEDORES`.
 - Un fixture autouse en `conftest.py` hace fallar cualquier test que

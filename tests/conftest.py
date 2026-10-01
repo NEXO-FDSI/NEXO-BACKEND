@@ -9,6 +9,7 @@ from app.api.correlation import get_attck_index
 from app.api.indicators import get_vector_store
 from app.core.config import settings
 from app.correlation.attck_loader import AttckIndex
+from app.enrichment.providers.base import Ventana
 from app.db.database import Base, get_db
 from app.main import app as fastapi_app
 from app.db import models  # noqa: F401  — puebla Base.metadata con las 8 tablas
@@ -129,6 +130,8 @@ def sin_fuentes_reales(monkeypatch):
     # constante del módulo, no time.sleep (que es global y afectaría a otros tests).
     monkeypatch.setattr("app.enrichment.client.ESPERA_REINTENTO", 0)
     monkeypatch.setattr("app.enrichment.providers.base.ESPERA_REINTENTO", 0)
+    # Cupo de VirusTotal nuevo por test: si no, las consultas de un test agotarían el del siguiente.
+    monkeypatch.setattr("app.enrichment.providers.virustotal.CUPO", Ventana(maximo=4, segundos=60))
 
 
 @pytest.fixture

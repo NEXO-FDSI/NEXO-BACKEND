@@ -1,5 +1,8 @@
 """Correlación en dos etapas: (a) resolución de entidad, (b) recuperación de técnicas.
 
+La etapa (a) combina la evidencia de OTX, ThreatFox y VirusTotal; cada resultado guarda qué
+fuentes lo sustentan (procedencia).
+
 La etapa (b) nunca se ejecuta si (a) no resolvió. Eso es verificable por inspección:
 correlate_indicator hace un return temprano antes de cualquier llamada a
 retrieve_techniques_for_entity.
@@ -45,42 +48,80 @@ def _candidatos(detalle: dict) -> tuple[list[list[str]], list[list[str]], int]:
     return familias, tags, descartados
 
 
-def _mas_respaldada(por_pulse: list[list[str]], index: AttckIndex) -> tuple[str, str, int] | None:
-    """(canónico, candidato textual, nº de pulses que lo respaldan) de la entidad con más
-    pulses distintos a favor. Empate: gana la que apareció primero."""
-    soporte: dict[str, int] = {}  # dict conserva el orden de aparición
-    texto: dict[str, str] = {}
-    for candidatos in por_pulse:
-        en_este_pulse = set()
+FUENTE_OTX = "alienvault_otx"  # literal: importar app.enrichment.service aquí sería circular
+_RUTA_FAMILIAS_OTX = "pulse_info.pulses[].malware_families[].display_name"
+_RUTA_TAGS_OTX = "pulse_info.pulses[].tags[]"
+
+
+def _votos(detalle: dict, fuentes: list[dict]) -> tuple[list[tuple], list[tuple], int]:
+    """(votos de familias, votos de etiquetas, pulses masivos descartados).
+
+    Un voto = (fuente_api, ruta, candidatos). OTX vota una vez por pulse no masivo (como
+    siempre); ThreatFox y VirusTotal, una vez cada una y solo si encontraron el indicador.
+    De ellas se usa su resumen normalizado (familias y etiquetas ya saneadas).
+    """
+    familias, tags, descartados = _candidatos(detalle)
+    votos_familias = [(FUENTE_OTX, _RUTA_FAMILIAS_OTX, c) for c in familias]
+    votos_tags = [(FUENTE_OTX, _RUTA_TAGS_OTX, c) for c in tags]
+    for f in fuentes:
+        if f["fuente"] == FUENTE_OTX or f["estado"] != "con_evidencia" or not f.get("resumen"):
+            continue
+        votos_familias.append((f["fuente"], f"{f['etiqueta']} familias", f["resumen"]["familias"]))
+        votos_tags.append((f["fuente"], f"{f['etiqueta']} etiquetas", f["resumen"]["etiquetas"]))
+    return votos_familias, votos_tags, descartados
+
+
+def _soporte(votos: list[tuple], index: AttckIndex) -> dict[str, dict[str, list]]:
+    """canónico → {fuente_api: [ruta, candidato textual, nº de votos]}, en orden de aparición."""
+    soporte: dict[str, dict[str, list]] = {}  # dict conserva el orden de aparición
+    for fuente, ruta, candidatos in votos:
+        en_este_voto = set()
         for candidato in candidatos:
             canonico = find_entity(index, candidato)
-            if canonico is None or canonico in en_este_pulse:
+            if canonico is None or canonico in en_este_voto:
                 continue
-            en_este_pulse.add(canonico)
-            soporte[canonico] = soporte.get(canonico, 0) + 1
-            texto.setdefault(canonico, candidato)
-    if not soporte:
-        return None
-    ganador = max(soporte, key=soporte.__getitem__)  # max devuelve el primero entre empatados
-    return ganador, texto[ganador], soporte[ganador]
+            en_este_voto.add(canonico)
+            por_fuente = soporte.setdefault(canonico, {})
+            if fuente in por_fuente:
+                por_fuente[fuente][2] += 1
+            else:
+                por_fuente[fuente] = [ruta, candidato, 1]
+    return soporte
 
 
-def resolve_entity_from_enrichment(detalle: dict, index: AttckIndex) -> dict | None:
-    """Etapa (a). Devuelve la entidad resuelta con su evidencia, o None."""
-    familias, tags, descartados = _candidatos(detalle)
+def _describir_respaldo(fuente: str, ruta: str, candidato: str, votos: int, descartados: int) -> str:
+    if fuente != FUENTE_OTX:
+        return f"{ruta} = '{candidato}'"
+    texto = f"{ruta} = '{candidato}' (respaldado por {votos} pulse(s)"
+    if descartados:
+        texto += f"; {descartados} pulse(s) masivo(s) descartado(s)"
+    return texto + ")"
 
-    for por_pulse, confianza, ruta in (
-        (familias, CONFIANZA_MALWARE_FAMILIES, "pulse_info.pulses[].malware_families[].display_name"),
-        (tags, CONFIANZA_TAGS, "pulse_info.pulses[].tags[]"),
-    ):
-        ganador = _mas_respaldada(por_pulse, index)
-        if ganador is None:
+
+def resolve_entity_from_enrichment(detalle: dict, index: AttckIndex, fuentes: list[dict] = ()) -> dict | None:
+    """Etapa (a) sobre la evidencia combinada. Devuelve la entidad resuelta, o None.
+
+    detalle: respuesta cruda de OTX ({} si no la hay). fuentes: entradas de /enrich (con su
+    resumen normalizado); de ellas aportan ThreatFox y VirusTotal.
+    Gana la entidad respaldada por más fuentes distintas; desempate: más votos (pulses);
+    luego la que apareció primero. Con solo OTX equivale a la regla de la Etapa 9.
+    """
+    familias, tags, descartados = _votos(detalle, list(fuentes))
+    todas = _soporte(familias + tags, index)
+
+    for votos, confianza in ((familias, CONFIANZA_MALWARE_FAMILIES), (tags, CONFIANZA_TAGS)):
+        soporte = _soporte(votos, index)
+        if not soporte:
             continue
-        canonico, candidato, soporte = ganador
-        evidencia = f"{ruta} = '{candidato}' (respaldado por {soporte} pulse(s)"
-        if descartados:
-            evidencia += f"; {descartados} pulse(s) masivo(s) descartado(s)"
-        evidencia += ")"
+        canonico = max(  # max devuelve el primero entre empatados
+            soporte, key=lambda e: (len(soporte[e]), sum(v[2] for v in soporte[e].values()))
+        )
+        # Procedencia: las fuentes del nivel ganador y, detrás, las que solo lo nombran en
+        # el otro nivel (p. ej. una etiqueta de VirusTotal que corrobora la familia de OTX).
+        respaldo = dict(soporte[canonico])
+        for fuente, dato in todas[canonico].items():
+            respaldo.setdefault(fuente, dato)
+        evidencia = "; ".join(_describir_respaldo(f, *dato, descartados) for f, dato in respaldo.items())
         if canonico in index.ambiguous:
             tipos = ", ".join(index.ambiguous[canonico])
             evidencia += f" (nombre ambiguo en ATT&CK: {tipos} — técnicas fusionadas)"
@@ -89,9 +130,16 @@ def resolve_entity_from_enrichment(detalle: dict, index: AttckIndex) -> dict | N
             "tipo": index.entity_type[canonico],
             "confianza": confianza,
             "evidencia": evidencia,
+            "fuentes": list(respaldo),
         }
 
     return None  # evidencia insuficiente: no se fuerza ninguna asociación
+
+
+def procedencia_de(nombre: str, detalle: dict, index: AttckIndex, fuentes: list[dict] = ()) -> list[str]:
+    """Fuentes cuya evidencia (familias o etiquetas) resuelve a esa entidad."""
+    familias, tags, _ = _votos(detalle, list(fuentes))
+    return list(_soporte(familias + tags, index).get(nombre, {}))
 
 
 def retrieve_techniques_for_entity(nombre_canonico: str, index: AttckIndex) -> list[str]:
@@ -121,42 +169,58 @@ def _persistir_tecnicas(db: Session, entity_id: int, ids: list[str], index: Attc
 
 
 def _sin_asociacion() -> dict:
-    return {"resuelto": False, "entity": None, "confianza": None, "evidencia": None, "tecnicas": []}
+    return {
+        "resuelto": False, "entity": None, "confianza": None, "evidencia": None,
+        "fuentes": [], "tecnicas": [],
+    }
 
 
-def _tecnicas_de(nombre: str, index: AttckIndex) -> list[dict]:
+def _tecnicas_de(nombre: str, index: AttckIndex, procedencia: list[str], fuentes: list[dict]) -> list[dict]:
+    """Técnicas de la entidad con su procedencia: `fuentes` = las que sustentan la entidad;
+    `reportada_por` = las que además citan ese ID de ATT&CK. Un ID citado por una fuente
+    nunca agrega una técnica: solo corrobora una de la cadena entidad → técnicas."""
+    reportadas: dict[str, list[str]] = {}
+    for f in fuentes:
+        for tid in (f.get("resumen") or {}).get("tecnicas_attck") or []:
+            reportadas.setdefault(tid, []).append(f["fuente"])
     return [
-        {"id": tid, **index.techniques[tid]}
+        {"id": tid, **index.techniques[tid], "fuentes": list(procedencia), "reportada_por": reportadas.get(tid, [])}
         for tid in retrieve_techniques_for_entity(nombre, index)
         if tid in index.techniques
     ]
 
 
-def correlation_from_link(link, detalle: dict, index: AttckIndex) -> dict | None:
+def correlation_from_link(link, detalle: dict, index: AttckIndex, fuentes: list[dict] = ()) -> dict | None:
     """Lo que devolvió (o devolvería) /correlate, SIN escribir nada: para reconstruir una
     investigación con GET. None si la correlación aún no se ejecutó.
 
     Con link de la etapa (a) se reconstruye desde él (entidad, confianza y evidencia
-    persistidas). Sin link, la correlación es determinística sobre la caché de OTX: si la
-    etapa (a) no resuelve, /correlate daría "sin asociación"; si resuelve, es que todavía
-    no se ejecutó (al ejecutarse habría creado el link).
+    persistidas; la procedencia se recalcula de la caché). Sin link, la correlación es
+    determinística sobre la caché de las fuentes: si la etapa (a) no resuelve, /correlate
+    daría "sin asociación"; si resuelve, es que todavía no se ejecutó (al ejecutarse habría
+    creado el link).
     """
+    fuentes = list(fuentes)
     if link is None:
-        return _sin_asociacion() if resolve_entity_from_enrichment(detalle, index) is None else None
+        return _sin_asociacion() if resolve_entity_from_enrichment(detalle, index, fuentes) is None else None
     entity = link.entity
+    procedencia = procedencia_de(entity.nombre, detalle, index, fuentes)
     return {
         "resuelto": True,
         "entity": {"id": entity.id, "nombre": entity.nombre, "tipo": entity.tipo},
         "confianza": link.confianza,
         "evidencia": link.evidencia,
-        "tecnicas": _tecnicas_de(entity.nombre, index),
+        "fuentes": procedencia,
+        "tecnicas": _tecnicas_de(entity.nombre, index, procedencia, fuentes),
     }
 
 
 def correlate_indicator(
-    db: Session, indicator: Indicator, detalle: dict, index: AttckIndex
+    db: Session, indicator: Indicator, detalle: dict, index: AttckIndex, fuentes: list[dict] = ()
 ) -> dict:
-    resuelto = resolve_entity_from_enrichment(detalle, index)
+    """detalle: respuesta cruda de OTX ({} si no la hay); fuentes: entradas de /enrich."""
+    fuentes = list(fuentes)
+    resuelto = resolve_entity_from_enrichment(detalle, index, fuentes)
 
     if resuelto is None:
         # Corte de la cadena. Nada debajo de esta línea se ejecuta.
@@ -179,7 +243,7 @@ def correlate_indicator(
             },
         )
 
-    tecnicas = _tecnicas_de(nombre, index)
+    tecnicas = _tecnicas_de(nombre, index, resuelto["fuentes"], fuentes)
     _persistir_tecnicas(db, entity.id, [t["id"] for t in tecnicas], index)
 
     return {
@@ -187,5 +251,6 @@ def correlate_indicator(
         "entity": {"id": entity.id, "nombre": entity.nombre, "tipo": entity.tipo},
         "confianza": resuelto["confianza"],
         "evidencia": resuelto["evidencia"],
+        "fuentes": resuelto["fuentes"],
         "tecnicas": tecnicas,
     }

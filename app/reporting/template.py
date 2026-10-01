@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from app.db.models import Indicator
 from app.enrichment.providers.base import describir
+from app.enrichment.service import FALLIDOS
 
 FUENTE_TECNICAS = 'MITRE ATT&CK STIX dataset — relationship "uses"'
 ANALISIS_NO_DISPONIBLE = (
@@ -16,6 +17,7 @@ SEVERIDAD = {
     "critica": "Crítica", "alta": "Alta", "media": "Media", "baja": "Baja",
     "benigno": "Benigno conocido", "indeterminada": "Indeterminada",
 }
+CONFIANZA = {"alta": "Alta", "media": "Media", "baja": "Baja", "sin_evidencia": "Sin evidencia suficiente"}
 TIPO_HALLAZGO = {"evidencia": "Evidencia", "inferencia": "Inferencia", "hipotesis": "Hipótesis"}
 CONCORDANCIA = {
     "concuerda": "concuerda con la entidad asociada",
@@ -43,17 +45,43 @@ def _celda(texto: str) -> str:
     return texto.replace("|", "/").replace("\n", " ")
 
 
-def _seccion_fuentes(fuentes: list[dict], concordancia: list[dict]) -> list[str]:
+def _seccion_fuentes(fuentes: list[dict], concordancia: list[dict], contradicciones: list[dict]) -> list[str]:
     if not fuentes:
         return []
-    lineas = ["", "### Fuentes consultadas", "", "| Fuente | Estado | Detalle |", "|---|---|---|"]
+    lineas = ["| Fuente | Estado | Detalle |", "|---|---|---|"]
     for f in fuentes:
         detalle = describir(f["resumen"]) if f.get("resumen") else (f.get("error") or "—")
         lineas.append(f"| {f['etiqueta']} | {f['estado'].replace('_', ' ')} | {_celda(detalle)} |")
+    consultadas = [f["etiqueta"] for f in fuentes if f["estado"] in ("con_evidencia", "sin_evidencia")]
+    fallidas = [f"{f['etiqueta']} ({f['estado'].replace('_', ' ')})" for f in fuentes if f["estado"] in FALLIDOS]
+    lineas += ["", f"**Fuentes que respondieron:** {', '.join(consultadas) or 'ninguna'}"]
+    if fallidas:
+        lineas += [
+            "",
+            f"**Fuentes no disponibles:** {', '.join(fallidas)}. No se pudo verificar en ellas: "
+            "su ausencia **no** significa \"sin evidencia\" y el resultado es parcial.",
+        ]
+    if concordancia:
+        lineas.append("")
     for c in concordancia:
         entidades = f" ({', '.join(c['entidades'])})" if c["entidades"] else ""
         lineas.append(f"- **{c['etiqueta']}** {CONCORDANCIA[c['resultado']]}{entidades}.")
+    lineas += ["", "### Contradicciones", ""]
+    lineas += [f"- ⚠ {c['detalle']}." for c in contradicciones] or [
+        "Ninguna detectada entre las fuentes que respondieron."
+    ]
     return lineas
+
+
+def _procedencia(tecnica: dict, etiqueta: dict[str, str]) -> str:
+    """"vía entidad: OTX, ThreatFox; citada por OTX": de qué fuentes sale cada técnica."""
+    def nombres(claves):
+        return ", ".join(etiqueta.get(f, f) for f in claves)
+
+    texto = f"vía entidad: {nombres(tecnica['fuentes'])}" if tecnica.get("fuentes") else "vía entidad"
+    if tecnica.get("reportada_por"):
+        texto += f"; citada por {nombres(tecnica['reportada_por'])}"
+    return texto
 
 
 def _seccion_analisis(ia: dict | None) -> list[str]:
@@ -90,33 +118,36 @@ def _seccion_analisis(ia: dict | None) -> list[str]:
 
 def build_report_content(
     indicator: Indicator,
-    enrichment_detalle: dict,
     correlation_result: dict,
     ia: dict | None = None,
     *,
     severidad: dict | None = None,
+    confianza: dict | None = None,
     fuentes: list[dict] = (),
     concordancia: list[dict] = (),
+    contradicciones: list[dict] = (),
 ) -> str:
-    pulses = (enrichment_detalle.get("pulse_info") or {}).get("count") or 0
+    fuentes = list(fuentes)
+    etiqueta = {f["fuente"]: f["etiqueta"] for f in fuentes}
     cabecera = [
         f"**Tipo:** {indicator.tipo}",
         f"**Fecha de generación:** {datetime.now(timezone.utc).isoformat()}",
-        f"**Nivel de confianza:** {nivel_confianza(correlation_result)}",
     ]
+    if confianza:
+        cabecera.append(f"**Nivel de confianza:** {CONFIANZA[confianza['nivel']]} — {'; '.join(confianza['motivos'])}")
     if severidad:
         cabecera.append(f"**Severidad:** {SEVERIDAD[severidad['nivel']]} — {'; '.join(severidad['motivos'])}")
     # "  \n" es un salto de línea duro en Markdown: con "\n" a secas, los cuatro campos se
     # renderizaban como un solo párrafo.
     lineas = [f"# Informe de indicador: {indicator.valor}", "", "  \n".join(cabecera)]
+    con_evidencia = [f["etiqueta"] for f in fuentes if f["estado"] == "con_evidencia"]
     lineas += [
         "",
-        "## Enriquecimiento",
+        "## Evidencia por fuente",
         "",
-        "- Fuente: AlienVault OTX",
-        f"- Evidencia encontrada: {'Sí' if pulses > 0 else 'No'}",
-        f"- Reportes (pulses) que mencionan este indicador: {pulses}",
-        *_seccion_fuentes(list(fuentes), list(concordancia)),
+        f"- Evidencia encontrada: {'Sí, en ' + ', '.join(con_evidencia) if con_evidencia else 'No'}",
+        "",
+        *_seccion_fuentes(fuentes, list(concordancia), list(contradicciones)),
         "",
         "## Resolución de entidad y técnicas ATT&CK",
         "",
@@ -124,18 +155,24 @@ def build_report_content(
 
     if correlation_result["resuelto"]:
         entity = correlation_result["entity"]
+        respaldo = ", ".join(etiqueta.get(f, f) for f in correlation_result.get("fuentes") or [])
         lineas += [
             f"- **Entidad asociada:** {entity['nombre']} ({entity['tipo']})",
+            *([f"- **Respaldada por:** {respaldo}"] if respaldo else []),
             f"- **Evidencia de asociación:** {correlation_result['evidencia']}",
             f"- **Confianza de la asociación:** {correlation_result['confianza']}",
             "",
             "### Técnicas documentadas",
             "",
-            "| ID | Técnica | Táctica |",
-            "|---|---|---|",
-            *(f"| {t['id']} | {t['nombre']} | {t['tactica']} |" for t in correlation_result["tecnicas"]),
+            "| ID | Técnica | Táctica | Procedencia |",
+            "|---|---|---|---|",
+            *(
+                f"| {t['id']} | {t['nombre']} | {t['tactica']} | {_procedencia(t, etiqueta)} |"
+                for t in correlation_result["tecnicas"]
+            ),
             "",
-            f"**Fuente de las técnicas:** {FUENTE_TECNICAS}",
+            f"**Fuente de las técnicas:** {FUENTE_TECNICAS}, a partir de la entidad que "
+            "respaldan las fuentes indicadas.",
         ]
     else:
         lineas += [

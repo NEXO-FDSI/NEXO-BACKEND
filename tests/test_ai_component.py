@@ -102,17 +102,14 @@ def test_contexto_tiene_ids_citables_para_evidencia_y_tecnicas():
     assert ctx["sin_datos"] == ["VirusTotal (limite cuota)"]
 
 
-def test_contradiccion_entre_fuentes_llega_como_hecho():
-    concordancia = [
-        {"fuente": "virustotal", "etiqueta": "VirusTotal", "familias": ["sunburst"],
-         "entidades": ["sunburst"], "resultado": "discrepa"},
-        {"fuente": "threatfox", "etiqueta": "ThreatFox", "familias": [], "entidades": [],
-         "resultado": "no_comparable"},
-    ]
-    [cor] = [b for b in construir_contexto(INDICADOR, RESUELTO, TEXTOS, FUENTES, concordancia)["bloques"]
+def test_procedencia_y_contradicciones_llegan_como_hechos():
+    contradicciones = [{"tipo": "entidad_distinta", "fuentes": ["virustotal"],
+                        "detalle": "VirusTotal reporta familias que ATT&CK asocia a sunburst, no a la entidad asociada"}]
+    resuelto = {**RESUELTO, "fuentes": ["alienvault_otx", "threatfox"]}
+    [cor] = [b for b in construir_contexto(INDICADOR, resuelto, TEXTOS, FUENTES, contradicciones)["bloques"]
              if b["id"] == "E-COR"]
-    assert "VirusTotal reporta familias que ATT&CK asocia a sunburst: CONTRADICE" in cor["texto"]
-    assert "ThreatFox" not in cor["texto"]
+    assert "Fuentes que respaldan la asociación: AlienVault OTX, ThreatFox." in cor["texto"]
+    assert "CONTRADICCIÓN detectada por NEXO: VirusTotal reporta familias que ATT&CK asocia a sunburst" in cor["texto"]
 
 
 def test_prompt_encierra_los_datos_y_fija_las_reglas():
@@ -288,7 +285,7 @@ def _ia(analisis=None, **extra):
 
 
 def test_plantilla_con_analisis_estructurado():
-    md = build_report_content(INDICADOR, {}, RESUELTO, _ia(AnalisisIA(**SALIDA_OK).model_dump()))
+    md = build_report_content(INDICADOR, RESUELTO, _ia(AnalisisIA(**SALIDA_OK).model_dump()))
     assert "## Análisis\n\nEl indicador se asocia a Emotet por su familia de malware." in md
     assert "- **Evidencia** · Tres pulses lo vinculan a Emotet. — _E-OTX_" in md
     assert "- **Inferencia** · Podría usarse en phishing con adjuntos (T9001). — _E-COR, T9001_" in md
@@ -302,20 +299,20 @@ def test_plantilla_con_analisis_estructurado():
 
 def test_plantilla_informa_descartes():
     ia = _ia(AnalisisIA(**SALIDA_OK).model_dump(), descartes=[{"seccion": "x", "texto": "y", "motivo": "z"}])
-    md = build_report_content(INDICADOR, {}, RESUELTO, ia)
+    md = build_report_content(INDICADOR, RESUELTO, ia)
     assert "*1 afirmación(es) del modelo descartada(s) por citar fuera del contexto.*" in md
 
 
 def test_plantilla_sin_analisis_explica_el_motivo():
-    md = build_report_content(INDICADOR, {}, RESUELTO, _ia(motivo="ningún proveedor de IA respondió"))
+    md = build_report_content(INDICADOR, RESUELTO, _ia(motivo="ningún proveedor de IA respondió"))
     assert f"## Análisis\n\n{ANALISIS_NO_DISPONIBLE}" in md
     assert "> Motivo: ningún proveedor de IA respondió." in md
     # El contenido determinístico sigue íntegro.
     assert "| T9001 | Falsa Uno | Initial Access |" in md
-    assert "**Nivel de confianza:** 0.9" in md
+    assert "**Confianza de la asociación:** 0.9" in md
 
 
 def test_plantilla_sin_evidencia_tambien_lleva_la_nota():
-    md = build_report_content(INDICADOR, {}, SIN_EVIDENCIA, None)
+    md = build_report_content(INDICADOR, SIN_EVIDENCIA, None)
     assert "Sin evidencia suficiente" in md
     assert f"## Análisis\n\n{ANALISIS_NO_DISPONIBLE}" in md

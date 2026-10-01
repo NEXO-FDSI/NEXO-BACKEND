@@ -102,6 +102,7 @@ def test_sugiere_cuando_nexo_no_resolvio(attck_index):
     assert _resultados(SIN_ENTIDAD, [tf(["Emotet"])], attck_index) == {"threatfox": ("sugiere", ["emotet"])}
 
 
-def test_familias_desconocidas_no_son_comparables_y_otx_no_se_compara(attck_index):
+def test_familias_desconocidas_no_son_comparables_y_otx_tambien_se_compara(attck_index):
+    """OTX ya no es la base fija de la correlación: sus familias se contrastan como las demás."""
     r = _resultados(EMOTET, [otx(3), vt(60, familias=["trojan.generic"]), tf(estado="error")], attck_index)
-    assert r == {"virustotal": ("no_comparable", [])}
+    assert r == {"alienvault_otx": ("no_comparable", []), "virustotal": ("no_comparable", [])}

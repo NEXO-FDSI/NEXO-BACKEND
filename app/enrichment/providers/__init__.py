@@ -1,7 +1,7 @@
 """Registro de fuentes de enriquecimiento.
 
 Agregar una fuente = un archivo en este paquete que cumpla `Proveedor` + una línea aquí.
-El orden importa: OTX va primero porque la correlación se construye sobre sus pulses.
+El orden es el de presentación (UI, informe y desempates de la etapa (a)): OTX primero.
 """
 
 from app.enrichment.providers.base import CuotaExcedida, Proveedor

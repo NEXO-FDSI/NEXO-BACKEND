@@ -1,8 +1,11 @@
 """Contrato común de las fuentes de enriquecimiento. Sin FastAPI ni base de datos."""
 
 import re
+import threading
 import time
+from collections import deque
 from typing import Protocol
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -11,8 +14,12 @@ from app.enrichment.client import ReputationAPIError
 TIMEOUT = 10.0  # por fuente; las fuentes corren en paralelo, así que no se suman
 ESPERA_REINTENTO = 0.5  # segundos
 _NO_PERMITIDO = re.compile(r"[^\w .:/@-]")
+_NO_PERMITIDO_URL = re.compile(r"[\s<>\"'`]")
 _MAX_ETIQUETA = 64
 MAX_ETIQUETAS = 10
+MAX_REFERENCIAS = 5
+_MAX_URL = 300
+_TECNICA = re.compile(r"T\d{4}(?:\.\d{3})?")
 
 
 class CuotaExcedida(ReputationAPIError):
@@ -63,6 +70,28 @@ def unicos(textos, maximo: int = MAX_ETIQUETAS) -> list[str]:
     return salida[:maximo]
 
 
+def urls(textos, maximo: int = MAX_REFERENCIAS) -> list[str]:
+    """Referencias de terceros: solo http(s) con host, sin repetir y con tope. Terminan como
+    enlaces en la UI, así que nada de javascript:, data: ni URLs kilométricas."""
+    salida = []
+    for texto in textos:
+        if not isinstance(texto, str) or len(texto := texto.strip()) > _MAX_URL or texto in salida:
+            continue
+        partes = urlsplit(texto)
+        if partes.scheme in ("http", "https") and partes.netloc and not _NO_PERMITIDO_URL.search(texto):
+            salida.append(texto)
+    return salida[:maximo]
+
+
+def tecnicas(ids) -> list[str]:
+    """IDs ATT&CK (T#### o T####.###) que trae una fuente, sin repetir y en orden."""
+    salida = []
+    for i in ids:
+        if isinstance(i, str) and _TECNICA.fullmatch(i := i.strip().upper()) and i not in salida:
+            salida.append(i)
+    return salida
+
+
 def resumen(
     *,
     tiene_evidencia: bool,
@@ -74,6 +103,8 @@ def resumen(
     primera_vez: str | None = None,
     ultima_vez: str | None = None,
     referencia_url: str | None = None,
+    tecnicas_attck: list[str] = (),
+    referencias: list[str] = (),
 ) -> dict:
     """Forma única del resumen de cualquier fuente: lo único que ven la UI y el LLM."""
     return {
@@ -86,7 +117,33 @@ def resumen(
         "primera_vez": primera_vez,
         "ultima_vez": ultima_vez,
         "referencia_url": referencia_url,
+        "tecnicas_attck": list(tecnicas_attck),
+        "referencias": list(referencias),
     }
+
+
+class Ventana:
+    """Como mucho `maximo` consultas cada `segundos`, sin esperar: si no hay cupo, no se consulta.
+
+    Esperar bloquearía /enrich más allá de los 30 s del frontend; sin cupo, la fuente queda
+    "limite_cuota" y el siguiente "Reintentar" la vuelve a intentar (no se cachea un fallo).
+    ponytail: en memoria y por proceso; con varios workers, llevarla a Postgres o Redis.
+    """
+
+    def __init__(self, maximo: int, segundos: float):
+        self.maximo, self.segundos = maximo, segundos
+        self._marcas: deque[float] = deque()
+        self._lock = threading.Lock()  # las fuentes se consultan desde hilos
+
+    def tomar(self) -> bool:
+        ahora = time.monotonic()
+        with self._lock:
+            while self._marcas and ahora - self._marcas[0] >= self.segundos:
+                self._marcas.popleft()
+            if len(self._marcas) >= self.maximo:
+                return False
+            self._marcas.append(ahora)
+            return True
 
 
 def solicitar(metodo: str, url: str, fuente: str, **kwargs) -> httpx.Response:
@@ -134,4 +191,6 @@ def describir(r: dict) -> str:
         partes.append("etiquetas: " + ", ".join(r["etiquetas"][:5]))
     if r.get("primera_vez"):
         partes.append(f"visto por primera vez: {r['primera_vez']}")
+    if r.get("ultima_vez"):
+        partes.append(f"visto por última vez: {r['ultima_vez']}")
     return "; ".join(partes) + "."
