@@ -6,6 +6,7 @@ un SOC real. Ajustarlos cuando haya casos etiquetados.
 """
 
 from app.correlation.attck_loader import AttckIndex, find_entity
+from app.enrichment.providers.threatfox import CONFIANZA_MINIMA as TF_CONFIANZA_MINIMA
 from app.enrichment.service import FALLIDOS, RESPONDIERON
 
 CONFIANZA_FUERTE = 0.9  # malware_families en la etapa (a)
@@ -29,25 +30,35 @@ def calcular_severidad(correlacion: dict, fuentes: list[dict]) -> dict:
     vt_maliciosos, vt_sospechosos = vt.get("maliciosos") or 0, vt.get("sospechosos") or 0
     tf = _resumen(fuentes, "threatfox")
     otx = _resumen(fuentes, "alienvault_otx")
-    pulses = (otx.get("detecciones") or {}).get("pulses") or 0
+    detecciones_otx = otx.get("detecciones") or {}
+    # Solo pulses enfocados: los volcados agregados no son evidencia (Etapa 9).
+    pulses = max((detecciones_otx.get("pulses") or 0) - (detecciones_otx.get("pulses_masivos") or 0), 0)
+    tf_registra = bool(tf.get("tiene_evidencia"))
+    # Un registro de ThreatFox solo sube la severidad con confianza suficiente; por debajo
+    # (o sin confianza informada) cuenta como señal débil, igual que un pulse de OTX.
+    tf_fuerte = tf_registra and (tf.get("confianza") or 0) >= TF_CONFIANZA_MINIMA
 
     motivos = []
     if correlacion["resuelto"]:
         motivos.append(f"asociado a {entidad} con confianza {confianza}")
     if vt_maliciosos or vt_sospechosos:
         motivos.append(f"VirusTotal: {vt_maliciosos} motores maliciosos, {vt_sospechosos} sospechosos")
-    if tf.get("tiene_evidencia"):
+    if tf_registra:
         familias = ", ".join(tf.get("familias") or []) or "sin familia"
-        motivos.append(f"ThreatFox lo registra ({familias})")
+        motivo = f"ThreatFox lo registra ({familias})"
+        if not tf_fuerte:
+            confianza_tf = f"{tf['confianza']}/100" if tf.get("confianza") is not None else "no informada"
+            motivo += f" con confianza {confianza_tf}, por debajo del mínimo de {TF_CONFIANZA_MINIMA}"
+        motivos.append(motivo)
     if pulses and not correlacion["resuelto"]:
         motivos.append(f"{pulses} pulse(s) en OTX sin entidad atribuible")
 
     fuerte = correlacion["resuelto"] and confianza >= CONFIANZA_FUERTE
-    if fuerte and (vt_maliciosos >= VT_CRITICA or tf.get("tiene_evidencia")):
+    if fuerte and (vt_maliciosos >= VT_CRITICA or tf_fuerte):
         nivel = "critica"
-    elif fuerte or vt_maliciosos >= VT_ALTA or tf.get("tiene_evidencia"):
+    elif fuerte or vt_maliciosos >= VT_ALTA or tf_fuerte:
         nivel = "alta"
-    elif correlacion["resuelto"] or vt_maliciosos or vt_sospechosos or pulses:
+    elif correlacion["resuelto"] or vt_maliciosos or vt_sospechosos or pulses or tf_registra:
         nivel = "media"
     elif otx.get("veredicto") == "benigno_conocido":
         nivel, motivos = "benigno", ["OTX lo tiene en lista blanca y ninguna fuente lo reporta"]

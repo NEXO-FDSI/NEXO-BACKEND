@@ -55,6 +55,26 @@ Si alguna fuente falló, se agrega el motivo "no se pudo verificar en …: no si
 evidencia". `reports.nivel_confianza` (Float) sigue siendo la confianza de la asociación
 (0.9 / 0.6 / 0.0) para no romper la API.
 
+### Severidad: confianza mínima de ThreatFox
+
+Antes, cualquier registro de ThreatFox subía la severidad al menos a "alta" (y a "crítica"
+con una entidad fuerte), sin importar su `confidence_level`. Ahora solo cuenta como señal
+fuerte con confianza ≥ `CONFIANZA_MINIMA` (50/100, `providers/threatfox.py`, el mismo umbral
+que separa "malicioso" de "sospechoso" en el adaptador). Por debajo, o sin confianza
+informada, es señal débil ("media") y el motivo lo dice: "ThreatFox lo registra (Aisuru)
+con confianza 25/100, por debajo del mínimo de 50". El resto de reglas de severidad no
+cambia, y la correlación (etapa a) sigue usando ThreatFox sin este filtro.
+
+### Los volcados agregados no son evidencia
+
+Un pulse de OTX con más de 1.000 indicadores (`MAX_INDICADORES_PULSE`) ya se ignoraba en
+la correlación y en el resumen; ahora tampoco cuenta como evidencia. OTX tiene evidencia
+solo si quedan pulses enfocados (`count` menos los volcados listados), y la severidad
+cuenta solo esos. Un indicador que solo figura en volcados queda `sin_evidencia` (o
+`benigno_conocido` si además está en lista blanca, el caso de 8.8.8.8). Si OTX lista menos
+pulses que `count`, los no listados siguen contando: no se puede saber si son volcados. La
+UI lo explica en la pestaña de OTX en vez de decir "no tiene registros".
+
 ## IA e informe
 
 - `E-COR` lleva la procedencia y las contradicciones como hechos calculados por NEXO.

@@ -137,7 +137,8 @@ Reglas de la etapa (a), en `app/correlation/service.py`:
 - OTX vota una vez por pulse; ThreatFox y VirusTotal, una vez cada una y
   solo con `con_evidencia`.
 - Se ignoran los pulses con más de `MAX_INDICADORES_PULSE` (1.000)
-  indicadores: son volcados agregados.
+  indicadores: son volcados agregados. Tampoco cuentan como evidencia de
+  OTX (`providers/otx.py::resumir`) ni para la severidad.
 - Dentro de cada nivel gana la entidad respaldada por más fuentes
   distintas; desempate por más votos (pulses), luego orden de aparición.
 - Los IDs ATT&CK que trae una fuente (OTX `attack_ids`) solo corroboran

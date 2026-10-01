@@ -35,6 +35,11 @@ class OTX:
         # y no deben llegar ni a la UI ni al LLM como si describieran este indicador.
         pulses = [p for p in todos if (p.get("indicator_count") or 0) <= MAX_INDICADORES_PULSE]
         cantidad = info.get("count") or 0
+        masivos = len(todos) - len(pulses)
+        # Un volcado tampoco cuenta como evidencia: que un indicador figure entre cientos de
+        # miles no dice nada de él. Solo se descartan los volcados que se ven: si OTX listó
+        # menos pulses que `count`, los no listados cuentan (no se puede saber si lo son).
+        enfocados = cantidad - masivos
         familias = unicos(
             f.get("display_name") if isinstance(f, dict) else f
             for p in pulses
@@ -44,19 +49,19 @@ class OTX:
             isinstance(v, dict) and v.get("source") in _LISTAS_BLANCAS
             for v in crudo.get("validation") or []
         )
-        if cantidad == 0 and en_lista_blanca:
+        if enfocados <= 0 and en_lista_blanca:
             veredicto = "benigno_conocido"
-        elif cantidad == 0:
+        elif enfocados <= 0:
             veredicto = "sin_evidencia"
         else:
             # Estar en pulses es un reporte comunitario; con familia de malware, es malicioso.
             veredicto = "malicioso" if familias else "sospechoso"
         return resumen(
-            tiene_evidencia=cantidad > 0,
+            tiene_evidencia=enfocados > 0,
             veredicto=veredicto,
             familias=familias,
             etiquetas=unicos(t for p in pulses for t in p.get("tags") or []),
-            detecciones={"pulses": cantidad, "pulses_masivos": len(todos) - len(pulses)},
+            detecciones={"pulses": cantidad, "pulses_masivos": masivos},
             tecnicas_attck=tecnicas(
                 a.get("id") if isinstance(a, dict) else a for p in pulses for a in p.get("attack_ids") or []
             ),

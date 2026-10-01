@@ -13,8 +13,8 @@ from app.enrichment.providers.base import describir
 # de ~1300 chars de mediana. Sin recorte el prompt desborda el num_ctx de Ollama, que
 # trunca por el principio y se come justo las reglas. La tabla determinística del informe
 # sigue listando TODAS las técnicas: el recorte solo afecta al análisis del LLM.
-MAX_TECNICAS = 8
-MAX_CHARS_DESC = 600
+MAX_TECNICAS = 10
+MAX_CHARS_DESC = 1000
 
 # ID citable de cada fuente; una fuente nueva sin entrada aquí recibe "E-<NOMBRE>".
 ID_FUENTE = {"alienvault_otx": "E-OTX", "threatfox": "E-TF", "virustotal": "E-VT"}

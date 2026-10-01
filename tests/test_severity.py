@@ -19,9 +19,9 @@ def _fuente(nombre, estado="con_evidencia", **resumen):
             "resumen": {**base, **resumen} if con_resumen else None, "error": None}
 
 
-def otx(pulses=0, veredicto="sin_evidencia", estado=None):
-    return _fuente("alienvault_otx", estado or ("con_evidencia" if pulses else "sin_evidencia"),
-                   veredicto=veredicto, detecciones={"pulses": pulses})
+def otx(pulses=0, veredicto="sin_evidencia", estado=None, masivos=0):
+    return _fuente("alienvault_otx", estado or ("con_evidencia" if pulses > masivos else "sin_evidencia"),
+                   veredicto=veredicto, detecciones={"pulses": pulses, "pulses_masivos": masivos})
 
 
 def vt(maliciosos=0, sospechosos=0, familias=(), estado=None):
@@ -30,9 +30,9 @@ def vt(maliciosos=0, sospechosos=0, familias=(), estado=None):
                    detecciones={"maliciosos": maliciosos, "sospechosos": sospechosos, "total": 70})
 
 
-def tf(familias=(), estado=None):
+def tf(familias=(), estado=None, confianza=100):
     return _fuente("threatfox", estado or ("con_evidencia" if familias else "sin_evidencia"),
-                   familias=list(familias))
+                   familias=list(familias), confianza=confianza if familias else None)
 
 
 @pytest.mark.parametrize("correlacion, fuentes, nivel", [
@@ -43,11 +43,19 @@ def tf(familias=(), estado=None):
     (EMOTET, [otx(3), vt(2)], "alta"),
     (SIN_ENTIDAD, [otx(0), vt(7)], "alta"),
     (SIN_ENTIDAD, [otx(0), tf(["Aisuru"])], "alta"),
+    (SIN_ENTIDAD, [otx(0), tf(["Aisuru"], confianza=50)], "alta"),  # el mínimo es inclusivo
+    # ThreatFox con confianza bajo el mínimo (o sin informarla) es señal débil
+    (EMOTET, [otx(3), tf(["Emotet"], confianza=25)], "alta"),  # la entidad fuerte basta para "alta"
+    (SIN_ENTIDAD, [otx(0), tf(["Aisuru"], confianza=25)], "media"),
+    (SIN_ENTIDAD, [otx(0), tf(["Aisuru"], confianza=None)], "media"),
     # señales débiles
     (POR_TAGS, [otx(1)], "media"),
     (SIN_ENTIDAD, [otx(0), vt(1)], "media"),
     (SIN_ENTIDAD, [otx(0), vt(0, sospechosos=1)], "media"),
     (SIN_ENTIDAD, [otx(4)], "media"),
+    (SIN_ENTIDAD, [otx(4, masivos=1)], "media"),
+    # solo en volcados agregados: no es evidencia
+    (SIN_ENTIDAD, [otx(3, masivos=3), vt(0), tf()], "baja"),
     # sin señales
     (SIN_ENTIDAD, [otx(0, veredicto="benigno_conocido"), vt(0)], "benigno"),
     (SIN_ENTIDAD, [otx(0), vt(0), tf()], "baja"),
@@ -73,6 +81,13 @@ def test_motivos_nombran_la_evidencia():
         "VirusTotal: 69 motores maliciosos, 0 sospechosos",
         "ThreatFox lo registra (Emotet)",
     ]
+
+
+def test_threatfox_con_confianza_baja_lo_explica():
+    motivos = calcular_severidad(SIN_ENTIDAD, [otx(0), tf(["Aisuru"], confianza=25)])["motivos"]
+    assert motivos == ["ThreatFox lo registra (Aisuru) con confianza 25/100, por debajo del mínimo de 50"]
+    motivos = calcular_severidad(SIN_ENTIDAD, [otx(0), tf(["Aisuru"], confianza=None)])["motivos"]
+    assert motivos == ["ThreatFox lo registra (Aisuru) con confianza no informada, por debajo del mínimo de 50"]
 
 
 def test_indeterminada_nombra_las_fuentes_caidas():
