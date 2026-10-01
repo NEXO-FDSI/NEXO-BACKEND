@@ -120,6 +120,39 @@ def _persistir_tecnicas(db: Session, entity_id: int, ids: list[str], index: Attc
     db.flush()
 
 
+def _sin_asociacion() -> dict:
+    return {"resuelto": False, "entity": None, "confianza": None, "evidencia": None, "tecnicas": []}
+
+
+def _tecnicas_de(nombre: str, index: AttckIndex) -> list[dict]:
+    return [
+        {"id": tid, **index.techniques[tid]}
+        for tid in retrieve_techniques_for_entity(nombre, index)
+        if tid in index.techniques
+    ]
+
+
+def correlation_from_link(link, detalle: dict, index: AttckIndex) -> dict | None:
+    """Lo que devolvió (o devolvería) /correlate, SIN escribir nada: para reconstruir una
+    investigación con GET. None si la correlación aún no se ejecutó.
+
+    Con link de la etapa (a) se reconstruye desde él (entidad, confianza y evidencia
+    persistidas). Sin link, la correlación es determinística sobre la caché de OTX: si la
+    etapa (a) no resuelve, /correlate daría "sin asociación"; si resuelve, es que todavía
+    no se ejecutó (al ejecutarse habría creado el link).
+    """
+    if link is None:
+        return _sin_asociacion() if resolve_entity_from_enrichment(detalle, index) is None else None
+    entity = link.entity
+    return {
+        "resuelto": True,
+        "entity": {"id": entity.id, "nombre": entity.nombre, "tipo": entity.tipo},
+        "confianza": link.confianza,
+        "evidencia": link.evidencia,
+        "tecnicas": _tecnicas_de(entity.nombre, index),
+    }
+
+
 def correlate_indicator(
     db: Session, indicator: Indicator, detalle: dict, index: AttckIndex
 ) -> dict:
@@ -127,13 +160,7 @@ def correlate_indicator(
 
     if resuelto is None:
         # Corte de la cadena. Nada debajo de esta línea se ejecuta.
-        return {
-            "resuelto": False,
-            "entity": None,
-            "confianza": None,
-            "evidencia": None,
-            "tecnicas": [],
-        }
+        return _sin_asociacion()
 
     nombre = resuelto["nombre_canonico"]
 
@@ -152,11 +179,7 @@ def correlate_indicator(
             },
         )
 
-    tecnicas = [
-        {"id": tid, **index.techniques[tid]}
-        for tid in retrieve_techniques_for_entity(nombre, index)
-        if tid in index.techniques
-    ]
+    tecnicas = _tecnicas_de(nombre, index)
     _persistir_tecnicas(db, entity.id, [t["id"] for t in tecnicas], index)
 
     return {

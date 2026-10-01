@@ -1,5 +1,3 @@
-import json
-
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
@@ -7,8 +5,7 @@ from app.correlation.attck_loader import AttckIndex
 from app.correlation.service import correlate_indicator
 from app.db.database import get_db
 from app.db.repositories import indicator_repository
-from app.db.repositories.enrichment_cache import get_by_indicator_and_source
-from app.enrichment.service import FUENTE
+from app.enrichment.service import detalle_otx
 
 router = APIRouter(tags=["Correlation"])
 
@@ -40,13 +37,13 @@ def correlate(
             status_code=status.HTTP_404_NOT_FOUND, detail="Indicador no encontrado"
         )
 
-    cacheado = get_by_indicator_and_source(db, indicator_id, FUENTE)
-    if cacheado is None:
+    detalle = detalle_otx(db, indicator)
+    if detalle is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Debes ejecutar /enrich para este indicador antes de correlacionar",
         )
 
-    resultado = correlate_indicator(db, indicator, json.loads(cacheado.respuesta_json), index)
+    resultado = correlate_indicator(db, indicator, detalle, index)
     db.commit()
     return {"indicator_id": indicator_id, **resultado}

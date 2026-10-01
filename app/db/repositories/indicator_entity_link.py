@@ -19,3 +19,4 @@ def get_by_indicator_and_entity(
         .limit(1)
     )
     return db.scalars(stmt).first()
+

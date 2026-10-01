@@ -7,7 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.ai_component.vectorstore import ChromaVectorStore
-from app.api import correlation, enrichment, indicators, reports
+from app.api import correlation, enrichment, indicators, investigations, reports
+from app.enrichment.providers import PROVEEDORES
 from app.correlation.attck_loader import load_attck_index
 from app.core.config import settings
 
@@ -28,7 +29,7 @@ trazable a MITRE ATT&CK e informes auditables para un analista SOC.
 **Flujo** — cada paso requiere el anterior:
 
 1. `POST /indicators` — ingesta, normalización y validación.
-2. `POST /indicators/{id}/enrich` — reputación en AlienVault OTX (con caché).
+2. `POST /indicators/{id}/enrich` — reputación en OTX, ThreatFox y VirusTotal (con caché).
 3. `POST /indicators/{id}/correlate` — resolución de entidad y, solo si hubo, técnicas ATT&CK.
 4. `POST /indicators/{id}/report` — informe con análisis narrativo grounded (LLM + RAG).
 5. `POST /reports/{id}/validate` — aceptación o rechazo por un analista.
@@ -39,9 +40,10 @@ Información 2026-2, Grupo 2, Escuela Colombiana de Ingeniería Julio Garavito).
 
 TAGS = [
     {"name": "Indicators", "description": "Ingesta de indicadores de compromiso."},
-    {"name": "Enrichment", "description": "Reputación del indicador en AlienVault OTX."},
+    {"name": "Enrichment", "description": "Reputación del indicador en OTX, ThreatFox y VirusTotal."},
     {"name": "Correlation", "description": "Cadena de dos etapas contra MITRE ATT&CK."},
     {"name": "Reports", "description": "Informe del indicador y validación humana."},
+    {"name": "Investigations", "description": "Todas las investigaciones de la plataforma, paginadas."},
     {"name": "Health", "description": "Estado del servicio."},
 ]
 
@@ -100,8 +102,23 @@ app.include_router(indicators.router)
 app.include_router(enrichment.router)
 app.include_router(correlation.router)
 app.include_router(reports.router)
+app.include_router(investigations.router)
 
 
 @app.get("/health", tags=["Health"], summary="Estado del servicio")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/status", tags=["Health"], summary="Fuentes y proveedor de IA configurados")
+def status_servicio():
+    """Qué fuentes y qué IA usará el pipeline. Sin secretos y sin llamar a terceros: que
+    una fuente esté configurada no garantiza que responda (eso lo dice su estado en /enrich)."""
+    # Solo lo que muestra la interfaz: el respaldo sigue operando en llm_client, no se expone.
+    return {
+        "fuentes": [
+            {"fuente": p.nombre, "etiqueta": p.etiqueta, "configurada": p.configurado}
+            for p in PROVEEDORES
+        ],
+        "ia": {"proveedor": settings.LLM_PROVIDER, "modelo": settings.LLM_MODEL},
+    }

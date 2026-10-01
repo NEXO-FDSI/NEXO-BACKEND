@@ -75,15 +75,44 @@ Flujo del pipeline, un endpoint por paso (cada uno exige el anterior):
 1. `POST /indicators` — el `model_validator` de `IndicatorCreate` primero
    normaliza (refang, canonización) y luego valida el valor ya canónico
    (formato inválido → 422); duplicado → 409 por la restricción única.
-2. `POST /indicators/{id}/enrich` — consulta OTX y guarda la respuesta en
-   `enrichment_cache`. Si la API falla → 502, nunca un 200 "sin evidencia".
+2. `POST /indicators/{id}/enrich` — consulta en paralelo las fuentes de
+   `app/enrichment/providers/` (OTX, ThreatFox, VirusTotal) y guarda cada
+   respuesta en `enrichment_cache` (una fila por `fuente_api`). OTX es
+   obligatoria: si falla → 502, nunca un 200 "sin evidencia" (las demás
+   fuentes que respondieron se guardan igual). Las otras fuentes informan su
+   `estado` en `fuentes[]`. Las IPs no públicas no se envían a terceros.
 3. `POST /indicators/{id}/correlate` — correlación determinística contra
    el índice ATT&CK a partir del enriquecimiento cacheado (400 si no
    existe).
-4. `POST /indicators/{id}/report` — correlación + análisis del LLM
-   grounded en los textos de técnicas recuperados de Chroma.
+4. `POST /indicators/{id}/report` — correlación + severidad y concordancia
+   entre fuentes (determinísticas, `app/reporting/severity.py`) + análisis
+   del LLM en JSON sobre un contexto con IDs citables (`E-COR`, `E-OTX`,
+   `E-TF`, `E-VT`, `T####`). La salida se valida y se depura
+   (`app/ai_component/schema.py`): lo que cite fuera del contexto se
+   descarta. Todo queda en `reports.metadatos` (JSON en Text): contexto,
+   prompt, salida, descartes, modelo, latencia, estado de las fuentes.
 5. `POST /reports/{id}/validate` — validación humana; cada decisión es
    una fila nueva (historial auditable).
+
+Eliminación: `DELETE /indicators/{id}` borra en cascada, en una transacción
+y desde la aplicación (las FK no tienen `ON DELETE CASCADE`):
+`human_validation` → `reports` → `indicator_entity_link` →
+`enrichment_cache` → `indicators`, y luego las entidades que quedan
+huérfanas con sus `entity_technique_link`. El catálogo `techniques` nunca
+se toca. Devuelve filas borradas por tabla y deja un WARNING en el log.
+
+Consultas de solo lectura (no escriben ni salen a la red): `GET /indicators`
+(recientes, o búsqueda por `tipo` + `valor` normalizado),
+`GET /indicators/{id}` (investigación completa) y `GET /investigations`
+(todas, paginadas de a 10 como máximo). El `detalle` de OTX sale siempre recortado
+(`recortar_otx`) en `/enrich` y en las consultas; la respuesta cruda solo queda en
+`enrichment_cache.respuesta_json`. Ambas se
+arman en `app/reporting/investigaciones.py::construir`: una consulta por
+tabla para toda la página (no por indicador). Ojo: el identity map de
+SQLAlchemy es débil; las entidades precargadas se mantienen referenciadas
+mientras se construye, o cada `link.entity` volvería a consultar. La correlación sin link de la etapa (a) se deduce de forma
+determinística: "sin asociación" si la etapa (a) no resuelve, `null` si
+resolvería pero `/correlate` aún no se ejecutó.
 
 La correlación con MITRE ATT&CK sigue una cadena de **dos etapas
 deliberadamente separadas** — esto es central al diseño del proyecto, no
@@ -119,10 +148,16 @@ determinístico).
   inyectan con `get_attck_index` / `get_vector_store`. En tests el
   lifespan no corre: `conftest.py` sobreescribe esas dependencias con un
   índice sintético (técnicas `T900x`) y un `FakeVectorStore`.
+- Un fixture autouse (`sin_fuentes_reales`) deja ThreatFox y VirusTotal
+  "no configuradas" en tests aunque el `.env` tenga claves, y hace fallar
+  cualquier HTTP real de las fuentes. Agregar una fuente = un archivo en
+  `app/enrichment/providers/` que cumpla `Proveedor` + una línea en
+  `PROVEEDORES`.
 - Un fixture autouse en `conftest.py` hace fallar cualquier test que
   llame al LLM real; los tests que lo necesitan parchean
-  `app.ai_component.service.generate_analysis`, que devuelve
-  `(texto, meta)` (proveedor, modelo, latencia, tokens, intentos fallidos).
+  `app.ai_component.service.generate_analysis(prompt, validar)`, que
+  devuelve `(validar(json), meta)` (proveedor, modelo, latencia, tokens,
+  intentos fallidos). Los stubs deben pasar su JSON por `validar`.
 - Cada test corre en una transacción con rollback
   (`join_transaction_mode="create_savepoint"`), así que los `commit()`
   de los endpoints no persisten entre tests.

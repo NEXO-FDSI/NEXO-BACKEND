@@ -24,7 +24,7 @@ def _proveedores_caidos(monkeypatch, caidos: set[str]) -> list[str]:
     """Sustituye la llamada HTTP: los proveedores en `caidos` fallan, el resto responde."""
     llamados = []
 
-    def _completar(perfil: Perfil, prompt: str):
+    def _completar(perfil: Perfil, prompt: str, json: bool = False):
         llamados.append(perfil.proveedor)
         if perfil.proveedor in caidos:
             raise LLMServiceError(f"{perfil.proveedor} caído")
@@ -65,6 +65,36 @@ def test_sin_respaldo_configurado_solo_se_prueba_el_primario(monkeypatch):
     with pytest.raises(LLMServiceError):
         generate_analysis("prompt")
     assert llamados == [settings.LLM_PROVIDER]
+
+
+def test_respuesta_invalida_pasa_al_respaldo(con_respaldo, monkeypatch):
+    """JSON roto del primario = fallo del perfil: responde el respaldo con JSON válido."""
+    formatos = []
+
+    def _completar(perfil, prompt, json=False):
+        formatos.append(json)
+        texto = "esto no es json" if perfil.proveedor == "groq" else '{"ok": true}'
+        return texto, SimpleNamespace(prompt_tokens=1, completion_tokens=1)
+
+    def _validar(texto):
+        import json as _json
+        return _json.loads(texto)  # JSONDecodeError es ValueError
+
+    monkeypatch.setattr(llm_client, "_completar", _completar)
+    resultado, meta = generate_analysis("prompt", validar=_validar)
+    assert resultado == {"ok": True} and meta["proveedor"] == "ollama"
+    assert "formato inválido" in meta["intentos_fallidos"][0]["error"]
+    assert formatos == [True, True]  # con validador se pide JSON a ambos
+
+
+def test_con_validador_se_pide_json_al_proveedor(monkeypatch):
+    falso = _ClienteFalso()
+    monkeypatch.setattr(llm_client, "_cliente", lambda *a: falso)
+    llm_client._completar(_perfil("none"), "prompt", json=True)
+    assert falso.kwargs["response_format"] == {"type": "json_object"}
+    assert falso.kwargs["temperature"] == 0.2
+    llm_client._completar(_perfil("none"), "prompt")
+    assert "response_format" not in falso.kwargs
 
 
 class _ClienteFalso:
@@ -126,3 +156,42 @@ def test_autoria_indica_modelo_y_respaldo():
     linea = autoria_ia(meta)
     assert "ollama · qwen3:8b · 4100 ms" in linea and "respaldo: groq no respondió" in linea
     assert "respaldo" not in autoria_ia({**meta, "intentos_fallidos": []})
+
+
+def _429(retry_after: str | None):
+    import httpx
+    from openai import RateLimitError
+
+    headers = {"retry-after": retry_after} if retry_after else {}
+    respuesta = httpx.Response(429, headers=headers, request=httpx.Request("POST", "https://llm.example"))
+    return RateLimitError("rate limit", response=respuesta, body=None)
+
+
+class _ClienteCon429(_ClienteFalso):
+    def __init__(self, errores):
+        super().__init__()
+        self.errores, self.llamadas = list(errores), 0
+
+    def _crear(self, **kwargs):
+        self.llamadas += 1
+        if self.errores:
+            raise self.errores.pop(0)
+        return super()._crear(**kwargs)
+
+
+def test_429_con_espera_corta_reintenta_el_mismo_perfil(monkeypatch):
+    """Groq gratuito pide ~4 s tras agotar tokens/min: esperar es mejor que caer a Ollama."""
+    esperas = []
+    cliente = _ClienteCon429([_429("4")])
+    monkeypatch.setattr(llm_client, "_cliente", lambda *a: cliente)
+    monkeypatch.setattr(llm_client.time, "sleep", esperas.append)
+    assert llm_client._completar(_perfil("none"), "prompt")[0] == "Análisis."
+    assert cliente.llamadas == 2 and esperas == [4.0]
+
+
+@pytest.mark.parametrize("errores", [[_429("30")], [_429(None)], [_429("4"), _429("4")]])
+def test_429_largo_sin_indicacion_o_repetido_es_fallo(monkeypatch, errores):
+    monkeypatch.setattr(llm_client, "_cliente", lambda *a: _ClienteCon429(errores))
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: None)
+    with pytest.raises(LLMServiceError, match="rate limit"):
+        llm_client._completar(_perfil("none"), "prompt")

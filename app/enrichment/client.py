@@ -1,12 +1,16 @@
 """Cliente HTTP hacia AlienVault OTX. No conoce la base de datos ni FastAPI."""
 
 import ipaddress
+import time
 from urllib.parse import quote
 
 import httpx
 
 _BASE_URL = "https://otx.alienvault.com/api/v1/indicators"
-_TIMEOUT = 10.0  # un único intento, sin reintentos ni backoff
+# Por intento. Con un reintento, el peor caso es ~20,5 s: por debajo de los 30 s que el
+# frontend espera en /enrich.
+_TIMEOUT = 10.0
+ESPERA_REINTENTO = 0.5  # segundos
 _HASH_LENGTHS = (32, 40, 64)  # MD5, SHA-1, SHA-256
 _MOTIVO_MAX = 200  # recorta páginas de error HTML enormes
 
@@ -57,11 +61,19 @@ def fetch_reputation(tipo: str, valor: str, api_key: str) -> dict:
     # safe="": imprescindible para url (/ y : van codificados), inocuo para el resto.
     url = f"{_BASE_URL}/{seccion}/{quote(valor, safe='')}/general"
 
-    try:
-        respuesta = httpx.get(url, headers={"X-OTX-API-KEY": api_key}, timeout=_TIMEOUT)
-    except httpx.RequestError as exc:
-        # RequestError es el padre de TimeoutException y NetworkError.
-        raise ReputationAPIError(f"fallo de red consultando OTX: {exc}") from exc
+    # Un reintento ante fallo de red o 5xx: el 2026-09-30 OTX estuvo degradado de forma
+    # intermitente (5 de 6 consultas colgadas 40 s, la otra en 0,5 s). Un 4xx no se reintenta.
+    for intento in range(2):
+        try:
+            respuesta = httpx.get(url, headers={"X-OTX-API-KEY": api_key}, timeout=_TIMEOUT)
+        except httpx.RequestError as exc:
+            # RequestError es el padre de TimeoutException y NetworkError.
+            if intento == 1:
+                raise ReputationAPIError(f"fallo de red consultando OTX: {exc}") from exc
+        else:
+            if respuesta.status_code < 500 or intento == 1:
+                break
+        time.sleep(ESPERA_REINTENTO)
 
     if respuesta.status_code != 200:
         raise ReputationAPIError(
