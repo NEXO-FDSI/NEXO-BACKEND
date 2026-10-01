@@ -94,6 +94,14 @@ Flujo del pipeline, un endpoint por paso (cada uno exige el anterior):
 5. `POST /reports/{id}/validate` — validación humana; cada decisión es
    una fila nueva (historial auditable).
 
+Consultas de solo lectura (no escriben ni salen a la red): `GET /indicators`
+(recientes, o búsqueda por `tipo` + `valor` normalizado) y
+`GET /indicators/{id}` (indicador, enriquecimiento desde la caché,
+correlación reconstruida con `correlation_snapshot`, informes y
+validaciones). La correlación sin link de la etapa (a) se deduce de forma
+determinística: "sin asociación" si la etapa (a) no resuelve, `null` si
+resolvería pero `/correlate` aún no se ejecutó.
+
 La correlación con MITRE ATT&CK sigue una cadena de **dos etapas
 deliberadamente separadas** — esto es central al diseño del proyecto, no
 un detalle de implementación:
