@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import event
 
 from app.db.repositories import indicator_repository
-from app.db.repositories.enrichment_cache import enrichment_cache_repository
+from app.db.repositories.enrichment_cache import enrichment_cache_repository, get_by_indicator_and_source
 from app.enrichment.service import FUENTE
 
 OTX_MOCK = "app.enrichment.client.fetch_reputation"
@@ -87,7 +87,7 @@ def test_reconstruye_lo_mismo_que_devolvieron_los_post(client, monkeypatch, ia):
     corr = client.post(f"/indicators/{ind_id}/correlate").json()
     informe = client.post(f"/indicators/{ind_id}/report").json()
     validacion = client.post(f"/reports/{informe['id']}/validate",
-                             json={"decision": "rechazado", "analista": "N2"}).json()
+                             json={"decision": "rechazado"}).json()
 
     cuerpo = client.get(f"/indicators/{ind_id}").json()
     assert cuerpo["correlation"] == corr
@@ -164,7 +164,7 @@ def test_limites_de_paginacion_son_422(client, params):
     assert client.get("/investigations", params=params).status_code == 422
 
 
-def test_cada_item_es_la_investigacion_con_otx_recortado(client, monkeypatch, ia):
+def test_cada_item_es_la_investigacion_con_otx_recortado(client, db, monkeypatch, ia):
     crudo = _otx("Emotet")
     crudo["pulse_info"]["pulses"][0]["description"] = "texto largo que no viaja en el listado"
     crudo["sections"] = ["general", "geo"]
@@ -175,17 +175,15 @@ def test_cada_item_es_la_investigacion_con_otx_recortado(client, monkeypatch, ia
 
     [item] = client.get("/investigations").json()["items"]
     completo = client.get(f"/indicators/{ind_id}").json()
-    assert completo["enrichment"]["detalle_completo"] is True
-    assert completo["enrichment"]["detalle"] == crudo
-    assert item["enrichment"]["detalle_completo"] is False
+    # Ni el listado ni la investigación exponen la respuesta cruda de OTX...
+    assert "detalle_completo" not in item["enrichment"]
     assert "sections" not in item["enrichment"]["detalle"]
     assert "description" not in item["enrichment"]["detalle"]["pulse_info"]["pulses"][0]
     assert item["enrichment"]["detalle"]["pulse_info"]["pulses"][0]["malware_families"] == [{"display_name": "Emotet"}]
-    # Todo lo demás es idéntico a la investigación completa.
-    for campo in ("indicator", "correlation", "reports", "validations"):
-        assert item[campo] == completo[campo], campo
-    sin_detalle = lambda e: {k: v for k, v in e.items() if k not in ("detalle", "detalle_completo")}  # noqa: E731
-    assert sin_detalle(item["enrichment"]) == sin_detalle(completo["enrichment"])
+    # ...que sigue completa en la BD, por trazabilidad.
+    assert json.loads(get_by_indicator_and_source(db, ind_id, FUENTE).respuesta_json) == crudo
+    # La investigación es idéntica al ítem del listado.
+    assert item == completo
 
 
 def test_consultas_constantes_sin_importar_el_tamano_de_la_pagina(client, db, monkeypatch, ia):

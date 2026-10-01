@@ -1,8 +1,8 @@
 """Investigaciones reconstruidas desde lo persistido, en lote y SIN escribir ni salir a la red.
 
-Lo usan GET /indicators/{id} (una investigación, con la respuesta cruda de OTX completa) y
-GET /investigations (páginas de hasta 10, con la respuesta de OTX recortada). Un solo
-camino de construcción: una consulta por tabla para toda la página, no por indicador.
+Lo usan GET /indicators/{id} (una investigación) y GET /investigations (páginas de hasta
+10). Un solo camino de construcción: una consulta por tabla para toda la página, no por
+indicador. La respuesta de OTX siempre viaja recortada: la cruda solo vive en la BD.
 """
 
 import json
@@ -19,8 +19,9 @@ from app.schemas.human_validation import HumanValidationRead
 from app.schemas.indicator import IndicatorRead
 from app.schemas.report import ReportRead
 
-# Lo que la interfaz lee de OTX (app/domain/otx.ts del frontend). El resto de la respuesta
-# cruda (cientos de KB por indicador) no viaja en los listados.
+# Lo que la interfaz lee de OTX (src/domain/otx.ts del frontend). El resto de la respuesta
+# cruda (cientos de KB por indicador) no sale de la API: queda en enrichment_cache por
+# trazabilidad.
 _CAMPOS_PULSE = ("id", "name", "created", "indicator_count", "tags", "malware_families")
 
 
@@ -38,9 +39,7 @@ def recortar_otx(crudo: dict) -> dict:
     }
 
 
-def construir(
-    db: Session, indicators: list[Indicator], index: AttckIndex, *, detalle_completo: bool
-) -> list[dict]:
+def construir(db: Session, indicators: list[Indicator], index: AttckIndex) -> list[dict]:
     """Snapshot de cada indicador (mismo orden): indicator, enrichment, correlation, reports,
     validations. Cinco consultas en total, sin importar cuántos indicadores sean."""
     ids = [i.id for i in indicators]
@@ -88,9 +87,8 @@ def construir(
         enrichment = correlation = None
         if detalle is not None:
             resultado = get_or_fetch_enrichment(db, ind, consultar=False, cache=crudos)
-            if not detalle_completo:
-                resultado["detalle"] = recortar_otx(resultado["detalle"])
-            enrichment = {"indicator_id": ind.id, "fuente": FUENTE, **resultado, "detalle_completo": detalle_completo}
+            resultado["detalle"] = recortar_otx(resultado["detalle"])
+            enrichment = {"indicator_id": ind.id, "fuente": FUENTE, **resultado}
             snapshot = correlation_from_link(links.get(ind.id), detalle, index)
             correlation = {"indicator_id": ind.id, **snapshot} if snapshot else None
         snapshots.append({

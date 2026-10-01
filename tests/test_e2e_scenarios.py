@@ -174,13 +174,13 @@ def test_escenario_6_asociacion_incorrecta(client, monkeypatch, db, ia):
     # ...y la validación humana la rechaza, dejando la corrección registrada.
     informe = r["report"]
     v = client.post(f"/reports/{informe['id']}/validate",
-                    json={"decision": esperado["validation_decision"], "analista": "analista SOC N1"})
+                    json={"decision": esperado["validation_decision"]})
     assert v.status_code == 201, v.text
     assert v.json()["report_id"] == informe["id"] and v.json()["decision"] == "rechazado"
 
     filas = [f for f in human_validation_repository.list(db) if f.report_id == informe["id"]]
     assert len(filas) == 1
-    assert filas[0].decision == "rechazado" and filas[0].analista == "analista SOC N1"
+    assert filas[0].decision == "rechazado" and filas[0].analista is None  # sin login aún
     # El informe rechazado no se borra: queda para auditoría junto con su rechazo.
     assert report_repository.get(db, informe["id"]).contenido == informe["contenido"]
 

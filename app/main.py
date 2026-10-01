@@ -114,16 +114,11 @@ def health():
 def status_servicio():
     """Qué fuentes y qué IA usará el pipeline. Sin secretos y sin llamar a terceros: que
     una fuente esté configurada no garantiza que responda (eso lo dice su estado en /enrich)."""
-    respaldo = (
-        {"proveedor": settings.LLM_FALLBACK_PROVIDER, "modelo": settings.LLM_FALLBACK_MODEL}
-        if settings.LLM_FALLBACK_PROVIDER
-        else None
-    )
+    # Solo lo que muestra la interfaz: el respaldo sigue operando en llm_client, no se expone.
     return {
         "fuentes": [
-            {"fuente": p.nombre, "etiqueta": p.etiqueta, "tipos": sorted(p.tipos),
-             "configurada": p.configurado}
+            {"fuente": p.nombre, "etiqueta": p.etiqueta, "configurada": p.configurado}
             for p in PROVEEDORES
         ],
-        "ia": {"proveedor": settings.LLM_PROVIDER, "modelo": settings.LLM_MODEL, "respaldo": respaldo},
+        "ia": {"proveedor": settings.LLM_PROVIDER, "modelo": settings.LLM_MODEL},
     }

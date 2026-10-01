@@ -343,7 +343,8 @@ def test_status_informa_fuentes_e_ia_sin_secretos(client, monkeypatch):
     cuerpo = r.json()
     assert [(f["fuente"], f["configurada"]) for f in cuerpo["fuentes"]] == [
         (FUENTE, True), ("threatfox", True), ("virustotal", False)]
-    assert cuerpo["ia"]["proveedor"] == settings.LLM_PROVIDER
+    assert cuerpo["ia"] == {"proveedor": settings.LLM_PROVIDER, "modelo": settings.LLM_MODEL}
+    assert all(set(f) == {"fuente", "etiqueta", "configurada"} for f in cuerpo["fuentes"])
     assert "clave-tf-secreta" not in r.text
     assert settings.LLM_API_KEY.get_secret_value() not in r.text
 

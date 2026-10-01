@@ -134,6 +134,16 @@ def test_endpoint_200_con_evidencia(client, db):
     assert cuerpo["detalle"]["pulse_info"]["count"] == 5
 
 
+def test_endpoint_no_expone_la_respuesta_cruda_pero_la_guarda(client, db):
+    crudo = {**_otx(1), "sections": ["general"], "base_indicator": {"id": 1}}
+    ind = _indicador(db)
+    with patch(MOCK_TARGET, return_value=crudo):
+        cuerpo = client.post(f"/indicators/{ind.id}/enrich").json()
+
+    assert set(cuerpo["detalle"]) == {"type", "validation", "pulse_info"}
+    assert json.loads(get_by_indicator_and_source(db, ind.id, FUENTE).respuesta_json) == crudo
+
+
 def test_endpoint_200_sin_evidencia(client, db):
     ind = _indicador(db)
     with patch(MOCK_TARGET, return_value=_otx(0)):

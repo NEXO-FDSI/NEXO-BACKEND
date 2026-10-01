@@ -21,10 +21,9 @@ TAMANO_MAXIMO = 10  # por página: evita respuestas enormes (cada informe trae s
     description=(
         "Investigaciones completas de la plataforma (indicador, enriquecimiento, correlación, "
         "informes con `metadatos` y validaciones), de la más reciente a la más antigua, en "
-        f"páginas de hasta {TAMANO_MAXIMO}. Solo lectura. Para no sobrecargar la respuesta, el "
-        "`detalle` de OTX viaja recortado a los campos que usa la interfaz "
-        "(`detalle_completo: false`); `GET /indicators/{id}` devuelve el crudo completo. Una "
-        "página fuera de rango devuelve `items: []`."
+        f"páginas de hasta {TAMANO_MAXIMO}. Solo lectura. El `detalle` de OTX viaja recortado "
+        "a los campos que usa la interfaz, como en `/enrich`. Una página fuera de rango "
+        "devuelve `items: []`."
     ),
 )
 def list_investigations(
@@ -38,7 +37,7 @@ def list_investigations(
         db.scalars(select(Indicator).order_by(Indicator.id.desc()).offset((page - 1) * size).limit(size))
     )
     return {
-        "items": construir(db, indicators, index, detalle_completo=False),
+        "items": construir(db, indicators, index),
         "page": page,
         "size": size,
         "total": total,

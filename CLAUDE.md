@@ -104,7 +104,9 @@ se toca. Devuelve filas borradas por tabla y deja un WARNING en el log.
 Consultas de solo lectura (no escriben ni salen a la red): `GET /indicators`
 (recientes, o búsqueda por `tipo` + `valor` normalizado),
 `GET /indicators/{id}` (investigación completa) y `GET /investigations`
-(todas, paginadas de a 10 como máximo, con el OTX recortado). Ambas se
+(todas, paginadas de a 10 como máximo). El `detalle` de OTX sale siempre recortado
+(`recortar_otx`) en `/enrich` y en las consultas; la respuesta cruda solo queda en
+`enrichment_cache.respuesta_json`. Ambas se
 arman en `app/reporting/investigaciones.py::construir`: una consulta por
 tabla para toda la página (no por indicador). Ojo: el identity map de
 SQLAlchemy es débil; las entidades precargadas se mantienen referenciadas

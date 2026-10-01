@@ -115,7 +115,7 @@ def test_flujo_completo(client, db, vector_store, monkeypatch):
     assert meta["ia"]["analisis"]["hallazgos"][0]["fuentes"] == ["E-OTX"]
 
     r = client.post(f"/reports/{informe['id']}/validate",
-                    json={"decision": "aceptado", "analista": "analista de prueba"})
+                    json={"decision": "aceptado"})
     assert r.status_code == 201, r.text
     assert r.json()["report_id"] == informe["id"] and r.json()["decision"] == "aceptado"
 
@@ -124,7 +124,7 @@ def test_flujo_completo(client, db, vector_store, monkeypatch):
     assert fila is not None and fila.contenido == informe["contenido"]
     validaciones = [v for v in human_validation_repository.list(db) if v.report_id == informe["id"]]
     assert len(validaciones) == 1
-    assert validaciones[0].decision == "aceptado" and validaciones[0].analista == "analista de prueba"
+    assert validaciones[0].decision == "aceptado" and validaciones[0].analista is None
 
 
 def test_informe_sin_evidencia_tiene_confianza_cero(client, db, vector_store):
@@ -160,11 +160,6 @@ def test_validate_422_decision_invalida(client, db):
     _cachear(db, ind, _detalle())
     report_id = client.post(f"/indicators/{ind.id}/report").json()["id"]
     r = client.post(f"/reports/{report_id}/validate", json={"decision": "quizas"})
-    assert r.status_code == 422
-
-
-def test_validate_422_analista_demasiado_largo(client):
-    r = client.post("/reports/1/validate", json={"decision": "aceptado", "analista": "a" * 101})
     assert r.status_code == 422
 
 

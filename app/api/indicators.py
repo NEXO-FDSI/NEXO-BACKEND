@@ -105,7 +105,7 @@ def get_investigation(
             status_code=status.HTTP_404_NOT_FOUND, detail="Indicador no encontrado"
         )
 
-    [snapshot] = construir(db, [indicator], index, detalle_completo=True)
+    [snapshot] = construir(db, [indicator], index)
     return snapshot
 
 
