@@ -279,11 +279,15 @@ def test_fallo_de_threatfox_es_error_nunca_sin_evidencia(db, fuentes):
     assert f["threatfox"]["estado"] == "error" and f["threatfox"]["resumen"] is None
 
 
-def test_fallo_de_otx_sigue_siendo_502_pero_guarda_las_demas_fuentes(client, db, fuentes):
+def test_fallo_de_otx_no_tumba_el_enriquecimiento_si_otra_fuente_responde(client, db, fuentes):
+    """OTX ya no es obligatoria: queda en "error" (nunca "sin evidencia") y las demás siguen."""
     fuentes.otx = ReputationAPIError("fallo de red consultando OTX: timeout")
     ind = _ind(db)
     r = client.post(f"/indicators/{ind.id}/enrich")
-    assert r.status_code == 502 and "timeout" in r.json()["detail"]
+    assert r.status_code == 200
+    f = _por_fuente(r.json())
+    assert f[FUENTE]["estado"] == "error" and "timeout" in f[FUENTE]["error"]
+    assert r.json()["tiene_evidencia"] is True and r.json()["cobertura"] == "parcial"
     assert get_by_indicator_and_source(db, ind.id, FUENTE) is None
     assert get_by_indicator_and_source(db, ind.id, "virustotal") is not None
 
@@ -361,3 +365,34 @@ def test_otx_ignora_familias_y_tags_de_volcados_masivos():
     assert r["familias"] == ["WannaCry"] and r["etiquetas"] == ["ransomware"]
     assert r["detecciones"] == {"pulses": 2, "pulses_masivos": 1}
     assert "1 son volcados masivos y se ignoran" in base.describir(r)
+
+
+def _volcado(indicadores=250_000):
+    return {"indicator_count": indicadores, "malware_families": [{"display_name": "Detects"}], "tags": ["Imphash"]}
+
+
+def test_otx_solo_en_volcados_no_es_evidencia():
+    r = OTX().resumir({"pulse_info": {"count": 2, "pulses": [_volcado(), _volcado(1_062)]}}, "hash", HASH)
+    assert r["tiene_evidencia"] is False and r["veredicto"] == "sin_evidencia"
+    assert r["detecciones"] == {"pulses": 2, "pulses_masivos": 2}
+    assert r["familias"] == [] and r["etiquetas"] == []
+
+
+def test_otx_volcados_y_lista_blanca_es_benigno_conocido():
+    """El caso de 8.8.8.8: aparece en volcados y OTX lo tiene en lista blanca."""
+    crudo = {"pulse_info": {"count": 1, "pulses": [_volcado()]}, "validation": [{"source": "whitelist"}]}
+    assert OTX().resumir(crudo, "ip", "8.8.8.8")["veredicto"] == "benigno_conocido"
+
+
+def test_otx_pulses_no_listados_siguen_contando():
+    """OTX puede listar menos pulses que `count`: solo se descartan los volcados que se ven."""
+    r = OTX().resumir({"pulse_info": {"count": 5, "pulses": [_volcado()]}}, "hash", HASH)
+    assert r["tiene_evidencia"] is True and r["veredicto"] == "sospechoso"
+
+
+def test_indicador_solo_en_volcados_no_es_evidencia_en_enrich(db, fuentes):
+    fuentes.otx = {"pulse_info": {"count": 1, "pulses": [_volcado()]}}
+    fuentes.tf, fuentes.vt = {"query_status": "no_result", "data": ""}, {"no_encontrado": True}
+    r = get_or_fetch_enrichment(db, _ind(db))
+    assert r["tiene_evidencia"] is False
+    assert _por_fuente(r)[FUENTE]["estado"] == "sin_evidencia"

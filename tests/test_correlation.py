@@ -58,7 +58,7 @@ def test_sin_evidencia_la_etapa_b_nunca_se_invoca(db, attck_index):
 
     assert mock.call_count == 0, "la etapa (b) se ejecutó sin entidad resuelta"
     assert resultado == {"resuelto": False, "entity": None, "confianza": None,
-                         "evidencia": None, "tecnicas": []}
+                         "evidencia": None, "fuentes": [], "tecnicas": []}
     assert len(entity_repository.list(db)) == antes_ent
     assert len(indicator_entity_link_repository.list(db)) == antes_link
 
@@ -160,7 +160,9 @@ def test_caso_positivo_persiste_todo(db, attck_index):
     assert r["resuelto"] is True and r["confianza"] == 0.9
     assert r["entity"]["nombre"] == "emotet" and r["entity"]["tipo"] == "malware"
     assert [t["id"] for t in r["tecnicas"]] == ["T9001", "T9002"]
-    assert r["tecnicas"][0] == {"id": "T9001", "nombre": "Falsa Uno", "tactica": "Initial Access"}
+    assert r["fuentes"] == ["alienvault_otx"]
+    assert r["tecnicas"][0] == {"id": "T9001", "nombre": "Falsa Uno", "tactica": "Initial Access",
+                                "fuentes": ["alienvault_otx"], "reportada_por": []}
 
     link = indicator_entity_link_repository.list(db)
     assert len(link) == 1 and link[0].confianza == 0.9

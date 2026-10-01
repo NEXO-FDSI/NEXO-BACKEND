@@ -107,7 +107,7 @@ def test_sin_entidad_la_correlacion_es_sin_asociacion_aunque_no_se_haya_pedido(c
                                             "respuesta_json": json.dumps(_otx())})
     corr = client.get(f"/indicators/{ind.id}").json()["correlation"]
     assert corr == {"indicator_id": ind.id, "resuelto": False, "entity": None, "confianza": None,
-                    "evidencia": None, "tecnicas": []}
+                    "evidencia": None, "fuentes": [], "tecnicas": []}
 
 
 def test_con_entidad_pero_sin_correlate_la_correlacion_no_se_inventa(client, db):

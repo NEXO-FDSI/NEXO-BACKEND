@@ -4,9 +4,12 @@ from urllib.parse import quote
 
 from app.core.config import settings
 from app.enrichment.client import ReputationAPIError
-from app.enrichment.providers.base import resumen, solicitar, unicos
+from app.enrichment.providers.base import resumen, solicitar, unicos, urls
 
 _URL = "https://threatfox-api.abuse.ch/api/v1/"
+# confidence_level (0-100) desde el que un registro cuenta como "malicioso" y pesa en la
+# severidad. ponytail: perilla del prototipo, sin calibrar con casos reales.
+CONFIANZA_MINIMA = 50
 
 
 class ThreatFox:
@@ -54,7 +57,7 @@ class ThreatFox:
             tiene_evidencia=bool(iocs),
             veredicto=(
                 "sin_evidencia" if not iocs
-                else "malicioso" if (confianza or 0) >= 50 else "sospechoso"
+                else "malicioso" if (confianza or 0) >= CONFIANZA_MINIMA else "sospechoso"
             ),
             familias=unicos(i.get("malware_printable") for i in iocs),
             etiquetas=unicos(
@@ -64,5 +67,6 @@ class ThreatFox:
             confianza=confianza,
             primera_vez=vistos[0] if vistos else None,
             ultima_vez=vistos[-1] if vistos else None,
+            referencias=urls(i.get("reference") for i in iocs),
             referencia_url=f"https://threatfox.abuse.ch/browse.php?search=ioc%3A{quote(valor, safe='')}",
         )

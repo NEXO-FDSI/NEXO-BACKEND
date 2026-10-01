@@ -13,8 +13,8 @@ from app.enrichment.providers.base import describir
 # de ~1300 chars de mediana. Sin recorte el prompt desborda el num_ctx de Ollama, que
 # trunca por el principio y se come justo las reglas. La tabla determinística del informe
 # sigue listando TODAS las técnicas: el recorte solo afecta al análisis del LLM.
-MAX_TECNICAS = 8
-MAX_CHARS_DESC = 600
+MAX_TECNICAS = 10
+MAX_CHARS_DESC = 1000
 
 # ID citable de cada fuente; una fuente nueva sin entrada aquí recibe "E-<NOMBRE>".
 ID_FUENTE = {"alienvault_otx": "E-OTX", "threatfox": "E-TF", "virustotal": "E-VT"}
@@ -43,7 +43,11 @@ Reglas estrictas:
 - Clasifica cada hallazgo y cita en "fuentes" los IDs de los bloques que lo sustentan:
   "evidencia" = lo dice un bloque E-* (cítalo); "inferencia" = se deduce de los bloques
   citados; "hipotesis" = posible, pero sin sustento directo.
-- Si las fuentes se contradicen, dilo explícitamente.
+- Cita siempre la fuente de inteligencia de donde sale cada dato: E-OTX (AlienVault OTX),
+  E-TF (ThreatFox) o E-VT (VirusTotal). Si varias fuentes dicen lo mismo, cítalas todas.
+  E-COR es la correlación y las contradicciones calculadas por NEXO.
+- Si las fuentes se contradicen (E-COR las enumera), dilo explícitamente en un hallazgo.
+- Una fuente que no respondió NO significa que no haya evidencia: no la cuentes como tal.
 - No asignes severidad ni niveles de confianza: los calcula NEXO de forma determinística.
 - Sé conciso: resumen de 2-3 frases; como máximo 5 hallazgos, 3 técnicas destacadas y
   3 elementos por lista; cada frase de menos de 30 palabras.
@@ -85,21 +89,19 @@ def construir_contexto(
     correlation_result: dict,
     technique_texts: dict[str, dict],
     fuentes: list[dict] = (),
-    concordancia: list[dict] = (),
+    contradicciones: list[dict] = (),
 ) -> dict:
     """{bloques: [{id, titulo, texto}], sin_datos: [...], tecnicas_totales, tecnicas_mostradas}.
 
     Es exactamente lo que ve el modelo, y se persiste tal cual en los metadatos del informe.
     """
     entity = correlation_result["entity"]
-    # La concordancia la calcula NEXO: se da como hecho para que el modelo no tenga que
-    # descubrir (o ignorar) una contradicción entre fuentes. Medido: qwen3:8b la ignoraba.
-    contraste = "".join(
-        f" {c['etiqueta']} reporta familias que ATT&CK asocia a {', '.join(c['entidades'])}: "
-        + ("concuerda con la entidad asociada." if c["resultado"] == "concuerda"
-           else "CONTRADICE la entidad asociada.")
-        for c in concordancia
-        if c["resultado"] in ("concuerda", "discrepa")
+    etiqueta = {f["fuente"]: f["etiqueta"] for f in fuentes}
+    respaldo = [etiqueta.get(f, f) for f in correlation_result.get("fuentes") or []]
+    # Procedencia y contradicciones las calcula NEXO: se dan como hechos para que el modelo
+    # no tenga que descubrir (o ignorar) un desacuerdo entre fuentes. Medido: qwen3:8b lo ignoraba.
+    contraste = (f" Fuentes que respaldan la asociación: {', '.join(respaldo)}." if respaldo else "") + "".join(
+        f" CONTRADICCIÓN detectada por NEXO: {c['detalle']}." for c in contradicciones
     )
     bloques = [{
         "id": "E-COR",
@@ -159,8 +161,8 @@ def build_analysis_prompt(
     correlation_result: dict,
     technique_texts: dict[str, dict],
     fuentes: list[dict] = (),
-    concordancia: list[dict] = (),
+    contradicciones: list[dict] = (),
 ) -> str:
     return renderizar_prompt(
-        construir_contexto(indicator, correlation_result, technique_texts, fuentes, concordancia)
+        construir_contexto(indicator, correlation_result, technique_texts, fuentes, contradicciones)
     )

@@ -22,7 +22,7 @@ def generate_grounded_analysis(
     correlation_result: dict,
     vector_store: VectorStore,
     fuentes: list[dict] = (),
-    concordancia: list[dict] = (),
+    contradicciones: list[dict] = (),
 ) -> dict:
     """Registro del análisis de IA (se persiste en reports.metadatos["ia"]).
 
@@ -45,7 +45,7 @@ def generate_grounded_analysis(
         ia["motivo"] = "sin texto oficial de ATT&CK recuperado para las técnicas de la entidad"
         return ia
 
-    contexto = construir_contexto(indicator, correlation_result, technique_texts, fuentes, concordancia)
+    contexto = construir_contexto(indicator, correlation_result, technique_texts, fuentes, contradicciones)
     prompt = renderizar_prompt(contexto)
     ia.update(contexto=contexto["bloques"], prompt=prompt)
 

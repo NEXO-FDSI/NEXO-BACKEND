@@ -10,7 +10,7 @@ from app.correlation.attck_loader import AttckIndex
 from app.db.database import get_db
 from app.db.repositories import indicator_repository
 from app.db.repositories.indicator import eliminar_en_cascada, get_by_valor, list_recientes
-from app.enrichment.service import detalle_otx
+from app.enrichment.service import crudos_enriquecidos
 from app.normalization.normalizer import normalize_indicator
 from app.reporting.investigaciones import construir
 from app.reporting.service import generate_report
@@ -143,10 +143,11 @@ def delete_indicator(indicator_id: int, db: Session = Depends(get_db)):
     tags=["Reports"],
     summary="Generar el informe de un indicador",
     description=(
-        "Correlaciona (idempotente) y redacta el informe: enriquecimiento, entidad, técnicas "
-        "ATT&CK y un análisis narrativo del LLM basado solo en el texto oficial de esas "
-        "técnicas. Si no hubo entidad o el LLM falla, el informe se genera igual sin ese "
-        "apartado. **Requiere haber ejecutado `/enrich` antes** (**400** si no); **404** si "
+        "Correlaciona (idempotente) y redacta el informe: resumen por fuente (OTX, ThreatFox, "
+        "VirusTotal), entidad, técnicas ATT&CK con su procedencia, nivel de confianza con su "
+        "justificación, contradicciones entre fuentes, fuentes que no se pudieron verificar y "
+        "un análisis narrativo del LLM que cita la fuente de cada afirmación. Si no hubo "
+        "entidad o el LLM falla, el informe se genera igual sin ese apartado. **Requiere haber ejecutado `/enrich` antes** (**400** si no); **404** si "
         "el indicador no existe."
     ),
 )
@@ -162,13 +163,13 @@ def create_report(
             status_code=status.HTTP_404_NOT_FOUND, detail="Indicador no encontrado"
         )
 
-    detalle = detalle_otx(db, indicator)
-    if detalle is None:
+    crudos = crudos_enriquecidos(db, indicator)
+    if crudos is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Debes ejecutar /enrich para este indicador antes de generar el informe",
         )
 
-    report = generate_report(db, indicator, detalle, index, vector_store)
+    report = generate_report(db, indicator, crudos, index, vector_store)
     db.commit()
     return report

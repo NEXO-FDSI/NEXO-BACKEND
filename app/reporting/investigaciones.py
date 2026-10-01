@@ -2,7 +2,8 @@
 
 Lo usan GET /indicators/{id} (una investigación) y GET /investigations (páginas de hasta
 10). Un solo camino de construcción: una consulta por tabla para toda la página, no por
-indicador. La respuesta de OTX siempre viaja recortada: la cruda solo vive en la BD.
+indicador. Ninguna respuesta cruda sale: OTX viaja recortada y el resto como evidencia
+normalizada (`fuentes[].resumen`); las crudas solo viven en la BD.
 """
 
 import json
@@ -82,14 +83,15 @@ def construir(db: Session, indicators: list[Indicator], index: AttckIndex) -> li
     snapshots = []
     for ind in indicators:
         crudos = cache.get(ind.id, {})
-        # Igual que detalle_otx: {} si la IP no se consulta a terceros; None si falta /enrich.
-        detalle = {} if es_ip_no_publica(ind) else crudos.get(FUENTE)
         enrichment = correlation = None
-        if detalle is not None:
+        # Igual que crudos_enriquecidos: enriquecido si alguna fuente respondió o si la IP
+        # no se consulta a terceros; si no, falta /enrich.
+        if crudos or es_ip_no_publica(ind):
             resultado = get_or_fetch_enrichment(db, ind, consultar=False, cache=crudos)
-            resultado["detalle"] = recortar_otx(resultado["detalle"])
+            detalle = resultado["detalle"]
+            resultado["detalle"] = recortar_otx(detalle)
             enrichment = {"indicator_id": ind.id, "fuente": FUENTE, **resultado}
-            snapshot = correlation_from_link(links.get(ind.id), detalle, index)
+            snapshot = correlation_from_link(links.get(ind.id), detalle, index, resultado["fuentes"])
             correlation = {"indicator_id": ind.id, **snapshot} if snapshot else None
         snapshots.append({
             "indicator": IndicatorRead.model_validate(ind),
