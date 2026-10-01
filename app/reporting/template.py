@@ -99,15 +99,16 @@ def build_report_content(
     concordancia: list[dict] = (),
 ) -> str:
     pulses = (enrichment_detalle.get("pulse_info") or {}).get("count") or 0
-    lineas = [
-        f"# Informe de indicador: {indicator.valor}",
-        "",
+    cabecera = [
         f"**Tipo:** {indicator.tipo}",
         f"**Fecha de generación:** {datetime.now(timezone.utc).isoformat()}",
         f"**Nivel de confianza:** {nivel_confianza(correlation_result)}",
     ]
     if severidad:
-        lineas.append(f"**Severidad:** {SEVERIDAD[severidad['nivel']]} — {'; '.join(severidad['motivos'])}")
+        cabecera.append(f"**Severidad:** {SEVERIDAD[severidad['nivel']]} — {'; '.join(severidad['motivos'])}")
+    # "  \n" es un salto de línea duro en Markdown: con "\n" a secas, los cuatro campos se
+    # renderizaban como un solo párrafo.
+    lineas = [f"# Informe de indicador: {indicator.valor}", "", "  \n".join(cabecera)]
     lineas += [
         "",
         "## Enriquecimiento",

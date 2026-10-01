@@ -42,6 +42,8 @@ def test_plantilla_resuelto(db):
     md = build_report_content(_indicador(db), _detalle(familias=["Emotet"]), RESUELTO)
     assert md.startswith("# Informe de indicador: 10.0.0.1\n")
     assert "**Tipo:** ip" in md and "**Nivel de confianza:** 0.9" in md
+    # Salto duro de Markdown entre campos de la cabecera: si no, se renderizan en una línea.
+    assert "**Tipo:** ip  \n**Fecha de generación:**" in md
     assert "- Evidencia encontrada: Sí" in md
     assert "- Reportes (pulses) que mencionan este indicador: 1" in md
     assert "- **Entidad asociada:** emotet (malware)" in md
