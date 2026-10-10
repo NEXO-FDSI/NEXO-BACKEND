@@ -111,6 +111,12 @@ def sin_llm_real(monkeypatch):
 
     monkeypatch.setattr("app.ai_component.service.generate_analysis", _prohibido)
 
+    def _sin_embeddings(texto: str, timeout: float | None = None) -> list[float]:
+        raise ConnectionError("los tests no consultan el endpoint de embeddings")
+
+    # Fallar aquí lleva a la selección por táctica; los tests de embeddings lo parchean.
+    monkeypatch.setattr("app.ai_component.service.embed_text", _sin_embeddings)
+
 
 @pytest.fixture(autouse=True)
 def sin_fuentes_reales(monkeypatch):
