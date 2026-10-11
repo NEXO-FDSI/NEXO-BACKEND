@@ -380,6 +380,7 @@ Every error response is JSON with a `detail` field.
 | GET | `/batches/{id}` | Batches | batch | 200 | 404 |
 | POST | `/batches/{id}/report` | Batches | one member enriched | 201 | 400 nothing enriched · 404 |
 | POST | `/batch-reports/{id}/validate` | Batches | batch report | 201 | 404 · 422 invalid decision |
+| DELETE | `/batches/{id}` | Batches | batch | 200 | 404 |
 | GET | `/health` | Health | — | 200 | — |
 
 The examples below are real responses for a WannaCry sample (scenario 1 of the test dataset), with the LLM running locally.
@@ -549,6 +550,8 @@ Between 2 and 20 items. Each item is normalized and validated like `POST /indica
 Each call stores a new version (`batch_reports`), built only from what is already persisted: it does not enrich or correlate any indicator. The Markdown has seven sections — conclusion, indicators, links with their signal and source, joint ATT&CK coverage by tactic (shared techniques are flagged as *not* proving a link), members that do not take part and why, source coverage and limits, and the AI analysis. Indicator values are written as inline code so the UI never turns them into clickable links. Members still pending do not block the report: they are declared as partial coverage. `metadatos` freezes the correlation shown by `GET /batches/{id}`, the discarded items and the AI record.
 
 The LLM is called **once per batch** and only writes: it receives `E-LOTE` (NEXO's conclusion and coverage), one `E-I#` per processed indicator, up to 10 `E-V#` links and up to 6 official ATT&CK techniques (those documented for several entities first), and its output goes through the same validation and citation pruning as the per-indicator report. Pulse names never reach the prompt. It is not called if no member resolved an entity, and if it fails the report is generated anyway. `POST /batch-reports/{id}/validate` takes `{"decision": "aceptado" | "rechazado"}`; each decision is a new row, and `GET /batches` shows the latest report and its current decision.
+
+`DELETE /batches/{id}` removes the batch irreversibly, in one transaction: its report validations, every report version, the pasted entries and the batch. **Its indicators are not deleted**: they are investigations of their own and may belong to other batches. The response counts deleted rows per table and the server logs a WARNING.
 
 ## Testing
 

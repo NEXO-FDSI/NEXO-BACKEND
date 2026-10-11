@@ -1,3 +1,4 @@
+import logging
 from collections import Counter
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -12,6 +13,7 @@ from app.correlation.attck_loader import AttckIndex
 from app.correlation.lote import correlacionar_lote
 from app.db.database import get_db
 from app.db.models import Batch, BatchItem, BatchReport, BatchValidation, Indicator
+from app.db.repositories.batch import eliminar_lote_en_cascada
 from app.ingestion.lote import registrar_lote, validar_items
 from app.reporting.investigaciones import construir
 from app.reporting.lote import generate_batch_report
@@ -28,6 +30,7 @@ from app.schemas.batch import (
 from app.schemas.human_validation import HumanValidationRequest
 
 router = APIRouter(tags=["Batches"])
+logger = logging.getLogger(__name__)
 
 _RESUMEN = {"creado": "creados", "existente": "existentes", "duplicado": "duplicados", "invalido": "invalidos"}
 
@@ -245,3 +248,26 @@ def validate_batch_report(report_id: int, payload: HumanValidationRequest, db: S
     respuesta = BatchValidationRead.model_validate(validacion)
     db.commit()
     return respuesta
+
+
+@router.delete(
+    "/batches/{batch_id}",
+    summary="Eliminar un lote y sus informes",
+    description=(
+        "Eliminación **irreversible y en cascada**, en una sola transacción: validaciones de sus "
+        "informes conjuntos, informes (todas las versiones), las entradas que pegó el analista y "
+        "el lote. **Los indicadores no se borran**: son investigaciones propias, pueden estar en "
+        "otros lotes y siguen disponibles. Devuelve cuántas filas se borraron por tabla. **404** "
+        "si el lote no existe."
+    ),
+)
+def delete_batch(batch_id: int, db: Session = Depends(get_db)):
+    batch = db.get(Batch, batch_id)
+    if batch is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lote no encontrado")
+    nombre = batch.nombre
+    eliminados = eliminar_lote_en_cascada(db, batch)
+    db.commit()
+    # Se pierde el historial de validación del lote: queda constancia en el log del servidor.
+    logger.warning("lote #%d (%s) eliminado en cascada: %s", batch_id, nombre or "sin nombre", eliminados)
+    return {"batch_id": batch_id, "nombre": nombre, "eliminados": eliminados}

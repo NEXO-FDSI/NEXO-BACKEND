@@ -154,7 +154,9 @@ y desde la aplicación (las FK no tienen `ON DELETE CASCADE`):
 huérfanas con sus `entity_technique_link`. El catálogo `techniques` nunca
 se toca. En los lotes, el ítem no se borra: queda `eliminado` con
 `indicator_id` NULL. Devuelve filas afectadas por tabla y deja un WARNING
-en el log.
+en el log. `DELETE /batches/{id}` (`repositories/batch.py`) hace lo mismo con
+un lote: `batch_validation` → `batch_reports` → `batch_items` → `batches`;
+**nunca** borra sus indicadores (son investigaciones propias).
 
 Consultas de solo lectura (no escriben ni salen a la red): `GET /indicators`
 (recientes, o búsqueda por `tipo` + `valor` normalizado),
