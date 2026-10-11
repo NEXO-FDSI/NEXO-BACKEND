@@ -74,7 +74,7 @@ Tres capas:
 Flujo del pipeline, un endpoint por paso (cada uno exige el anterior):
 
 1. `POST /indicators` — el `model_validator` de `IndicatorCreate` primero
-   normaliza (refang, canonización) y luego valida el valor ya canónico
+   normaliza (refang sin distinguir mayúsculas, canonización) y luego valida el valor ya canónico
    (formato inválido → 422); duplicado → 409 por la restricción única.
 2. `POST /indicators/{id}/enrich` — consulta en paralelo las fuentes de
    `app/enrichment/providers/` (OTX, ThreatFox, VirusTotal) y guarda cada
@@ -100,12 +100,26 @@ Flujo del pipeline, un endpoint por paso (cada uno exige el anterior):
 5. `POST /reports/{id}/validate` — validación humana; cada decisión es
    una fila nueva (historial auditable).
 
+Lotes (Fase 7, plan en `docs/evolucion/fase-07-campanas-plan.md`): un
+**lote** (`batches`) es un conjunto de indicadores que define el analista;
+no es una *Campaign* de ATT&CK (esas son `entities.tipo = campaña`).
+`POST /batches` (`app/ingestion/lote.py`) valida cada ítem con
+`IndicatorCreate`: uno inválido queda `invalido` con su `motivo` sin abortar
+el lote, uno ya registrado se reutiliza (`existente`, sin 409) y dos con el
+mismo valor canónico son un `duplicado`. `batch_items` guarda todo lo que se
+pegó, en orden. Ingesta y consulta (`GET /batches/{id}`, que reutiliza
+`construir`) ejecutan las mismas sentencias con 2 o con 20 indicadores
+(`MAX_INDICADORES_LOTE`); `tests/test_lotes.py` lo mide. El lote no
+enriquece ni correlaciona: cada miembro sigue el flujo por indicador.
+
 Eliminación: `DELETE /indicators/{id}` borra en cascada, en una transacción
 y desde la aplicación (las FK no tienen `ON DELETE CASCADE`):
 `human_validation` → `reports` → `indicator_entity_link` →
 `enrichment_cache` → `indicators`, y luego las entidades que quedan
 huérfanas con sus `entity_technique_link`. El catálogo `techniques` nunca
-se toca. Devuelve filas borradas por tabla y deja un WARNING en el log.
+se toca. En los lotes, el ítem no se borra: queda `eliminado` con
+`indicator_id` NULL. Devuelve filas afectadas por tabla y deja un WARNING
+en el log.
 
 Consultas de solo lectura (no escriben ni salen a la red): `GET /indicators`
 (recientes, o búsqueda por `tipo` + `valor` normalizado),

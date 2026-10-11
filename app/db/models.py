@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base
@@ -113,3 +113,33 @@ class HumanValidation(Base):
     timestamp = Column(DateTime(timezone=True), default=_now)
 
     report = relationship("Report", back_populates="validations")
+
+
+class Batch(Base):
+    """Lote de indicadores que define el analista. No es una campaña de ATT&CK
+    (esas son entidades: entities.tipo = campaña)."""
+
+    __tablename__ = "batches"
+
+    id = Column(Integer, primary_key=True)
+    nombre = Column(String(200), nullable=True)
+    timestamp = Column(DateTime(timezone=True), default=_now)
+
+
+class BatchItem(Base):
+    """Cada entrada que pegó el analista, en orden, incluidas las descartadas: el lote
+    recuerda qué se pidió y por qué no se usó."""
+
+    __tablename__ = "batch_items"
+    # Varios NULL no chocan en Postgres: los descartes no tienen indicador.
+    __table_args__ = (UniqueConstraint("batch_id", "indicator_id", name="uq_batch_items_batch_indicator"),)
+
+    id = Column(Integer, primary_key=True)
+    batch_id = Column(Integer, ForeignKey("batches.id"), nullable=False, index=True)
+    # NULL si el ítem es inválido, está duplicado o su indicador se eliminó.
+    indicator_id = Column(Integer, ForeignKey("indicators.id"), nullable=True, index=True)
+    posicion = Column(Integer, nullable=False)  # orden de entrada, desde 1
+    entrada = Column(String(2048), nullable=False)  # tal como se pegó: hxxp://evil[.]com
+    tipo = Column(String(16), nullable=True)  # declarado; NULL si no se reconoció
+    ingesta = Column(String, nullable=False)  # creado / existente / duplicado / invalido / eliminado
+    motivo = Column(Text, nullable=True)

@@ -5,6 +5,7 @@ import json
 import pytest
 
 from app.db.models import (
+    BatchItem,
     EnrichmentCache,
     Entity,
     EntityTechniqueLink,
@@ -63,7 +64,7 @@ def test_borra_en_cascada_todo_lo_del_indicador(client, db, pipeline):
         "valor": "40.0.0.1",
         "eliminados": {
             "human_validation": 2, "reports": 2, "indicator_entity_link": 1, "enrichment_cache": 1,
-            "indicators": 1, "entity_technique_link": 2, "entities": 1,
+            "batch_items": 0, "indicators": 1, "entity_technique_link": 2, "entities": 1,
         },
     }
     assert db.get(Indicator, ind_id) is None
@@ -96,6 +97,19 @@ def test_indicador_solo_registrado(client, db):
     ind_id = client.post("/indicators", json={"tipo": "domain", "valor": "borrar-me.example"}).json()["id"]
     eliminados = client.delete(f"/indicators/{ind_id}").json()["eliminados"]
     assert eliminados["indicators"] == 1 and sum(eliminados.values()) == 1
+
+
+def test_en_un_lote_el_item_queda_eliminado_y_no_se_borra(client, db):
+    lote = client.post("/batches", json={"indicadores": [
+        {"tipo": "ip", "valor": "44.0.0.1"}, {"tipo": "ip", "valor": "44.0.0.2"}]}).json()
+    borrado, conservado = (i["indicator_id"] for i in lote["items"])
+
+    assert client.delete(f"/indicators/{borrado}").json()["eliminados"]["batch_items"] == 1
+    # Lo que pegó el analista sigue en el lote, sin indicador; el otro miembro queda intacto.
+    items = client.get(f"/batches/{lote['batch']['id']}").json()["items"]
+    assert [(i["entrada"], i["ingesta"], i["indicator_id"]) for i in items] == [
+        ("44.0.0.1", "eliminado", None), ("44.0.0.2", "creado", conservado)]
+    assert _cuenta(db, BatchItem, batch_id=lote["batch"]["id"]) == 2
 
 
 def test_el_valor_se_puede_volver_a_registrar(client):

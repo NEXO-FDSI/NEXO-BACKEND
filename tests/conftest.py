@@ -12,7 +12,7 @@ from app.correlation.attck_loader import AttckIndex
 from app.enrichment.providers.base import Ventana
 from app.db.database import Base, get_db
 from app.main import app as fastapi_app
-from app.db import models  # noqa: F401  — puebla Base.metadata con las 8 tablas
+from app.db import models  # noqa: F401  — puebla Base.metadata con todas las tablas
 
 
 def _test_url() -> str:

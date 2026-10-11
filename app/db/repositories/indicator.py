@@ -1,7 +1,8 @@
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.db.models import (
+    BatchItem,
     EnrichmentCache,
     Entity,
     EntityTechniqueLink,
@@ -30,7 +31,9 @@ def eliminar_en_cascada(db: Session, indicator: Indicator) -> dict[str, int]:
     Las FK no tienen ON DELETE CASCADE: se borra en orden (hijos primero) dentro de la
     transacción del endpoint, sin migrar el esquema. Las entidades y sus links a técnicas
     son conocimiento compartido entre indicadores: solo se borran si quedan huérfanas. El
-    catálogo `techniques` (ATT&CK) nunca se toca. Solo hace flush; el commit es del endpoint.
+    catálogo `techniques` (ATT&CK) nunca se toca. En los lotes, el ítem no se borra: queda
+    "eliminado" y sin indicador, para conservar lo que pegó el analista. Solo hace flush; el
+    commit es del endpoint.
     """
     def borrar(stmt) -> int:
         return db.execute(stmt.execution_options(synchronize_session=False)).rowcount
@@ -46,6 +49,13 @@ def eliminar_en_cascada(db: Session, indicator: Indicator) -> dict[str, int]:
             delete(IndicatorEntityLink).where(IndicatorEntityLink.indicator_id == indicator.id)
         ),
         "enrichment_cache": borrar(delete(EnrichmentCache).where(EnrichmentCache.indicator_id == indicator.id)),
+        # Desvinculados, no borrados (antes que el indicador: la FK lo apunta).
+        "batch_items": db.execute(
+            update(BatchItem)
+            .where(BatchItem.indicator_id == indicator.id)
+            .values(indicator_id=None, ingesta="eliminado")
+            .execution_options(synchronize_session=False)
+        ).rowcount,
         "indicators": borrar(delete(Indicator).where(Indicator.id == indicator.id)),
     }
 

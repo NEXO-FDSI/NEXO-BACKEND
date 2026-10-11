@@ -168,6 +168,8 @@ erDiagram
     techniques ||--o{ entity_technique_link : "stage (b)"
     indicators ||--o{ reports : "generates"
     reports    ||--o{ human_validation : "is validated by"
+    batches    ||--o{ batch_items : "keeps what the analyst pasted"
+    indicators |o--o{ batch_items : "member of"
 
     indicators {
         int id PK
@@ -220,7 +222,24 @@ erDiagram
         string analista
         timestamptz timestamp
     }
+    batches {
+        int id PK
+        string nombre
+        timestamptz timestamp
+    }
+    batch_items {
+        int id PK
+        int batch_id FK
+        int indicator_id FK "NULL if invalid, duplicate or deleted"
+        int posicion
+        string entrada "as pasted"
+        string tipo
+        string ingesta "creado / existente / duplicado / invalido / eliminado"
+        text motivo
+    }
 ```
+
+A **batch** (`batches`) is a set of indicators defined by the analyst. It is not an ATT&CK *Campaign*: those are entities (`entities.tipo = campaña`).
 
 Column names are in Spanish because they are the actual database columns. The schema is managed only by Alembic (`alembic/versions/`), never with `create_all()`. The one exception is the ephemeral test database.
 
@@ -339,6 +358,9 @@ Every error response is JSON with a `detail` field.
 | POST | `/indicators/{id}/correlate` | Correlation | `/enrich` | 200 | 400 not enriched · 404 |
 | POST | `/indicators/{id}/report` | Reports | `/enrich` | 201 | 400 not enriched · 404 |
 | POST | `/reports/{id}/validate` | Reports | report | 201 | 404 · 422 invalid decision |
+| POST | `/batches` | Batches | — | 201 | 409 concurrent registration · 422 no valid item or over the limits |
+| GET | `/batches` | Batches | — | 200 | — |
+| GET | `/batches/{id}` | Batches | batch | 200 | 404 |
 | GET | `/health` | Health | — | 200 | — |
 
 The examples below are real responses for a WannaCry sample (scenario 1 of the test dataset), with the LLM running locally.
@@ -469,6 +491,33 @@ curl -X POST http://localhost:8000/reports/1/validate \
 ```
 
 `decision` is `aceptado` or `rechazado`. `analista` is optional. Each call adds a row, so the history of decisions is preserved.
+
+### `POST /batches` — register a batch of indicators
+
+```bash
+curl -X POST http://localhost:8000/batches \
+  -H 'Content-Type: application/json' \
+  -d '{"nombre": "SolarWinds triage", "indicadores": [
+        {"tipo": "hash", "valor": "2c4a910a1299cdae2a4e55988a2f102e"},
+        {"tipo": "domain", "valor": "ervsystem[.]com"},
+        {"tipo": "domain", "valor": "ERVSYSTEM.COM"},
+        {"tipo": null, "valor": "not-an-ioc"}]}'
+```
+
+```json
+{
+  "batch": {"id": 7, "nombre": "SolarWinds triage", "timestamp": "2026-10-10T14:02:11Z"},
+  "items": [
+    {"posicion": 1, "entrada": "2c4a910a1299cdae2a4e55988a2f102e", "tipo": "hash", "ingesta": "existente", "indicator_id": 14, "valor": "2c4a910a1299cdae2a4e55988a2f102e", "motivo": null},
+    {"posicion": 2, "entrada": "ervsystem[.]com", "tipo": "domain", "ingesta": "creado", "indicator_id": 31, "valor": "ervsystem.com", "motivo": null},
+    {"posicion": 3, "entrada": "ERVSYSTEM.COM", "tipo": "domain", "ingesta": "duplicado", "indicator_id": null, "valor": null, "motivo": "mismo valor canónico que la posición 2"},
+    {"posicion": 4, "entrada": "not-an-ioc", "tipo": null, "ingesta": "invalido", "indicator_id": null, "valor": null, "motivo": "tipo no reconocido"}
+  ],
+  "resumen": {"creados": 1, "existentes": 1, "duplicados": 1, "invalidos": 1}
+}
+```
+
+Between 2 and 20 items. Each item is normalized and validated like `POST /indicators`, one by one: an invalid item is recorded with its `motivo` and **does not abort the batch**, an already registered value is reused (no 409), and two entries with the same canonical value are one indicator. New indicators get `fuente` = `Lote #<id>`. The batch does not enrich or correlate: each member still follows the per-indicator pipeline. `GET /batches/{id}` returns the items in order (including discarded ones and members deleted later) and each member's investigation, with the same shape as `GET /indicators/{id}`.
 
 ## Testing
 
