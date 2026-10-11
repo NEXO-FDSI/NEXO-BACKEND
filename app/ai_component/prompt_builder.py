@@ -6,6 +6,8 @@ comentarios de terceros ni cualquier texto libre externo. De las fuentes solo ll
 resumen normalizado (campos de una lista permitida, ya saneados).
 """
 
+from collections import Counter
+
 from app.db.models import Indicator
 from app.enrichment.providers.base import describir
 
@@ -189,6 +191,7 @@ MAX_VALOR_CONTEXTO = 100  # una URL puede tener 2.048 caracteres
 _RANGO_CONFIANZA = ("alta", "media", "baja")
 _NO_PARTICIPA = {"sin_entidad": "sin entidad atribuible", "sin_correlacionar": "sin correlacionar",
                  "sin_enriquecer": "sin enriquecer"}
+_SENAL_FUERTE = {"pulse_compartido": "pulse compartido de AlienVault OTX", "infraestructura": "misma infraestructura"}
 
 REGLAS_LOTE = f"""Eres un asistente que redacta el análisis del informe conjunto de un lote de
 indicadores de compromiso que definió un analista de seguridad (SOC).
@@ -204,6 +207,10 @@ Reglas estrictas:
   forma, no propongas vínculos nuevos y no contradigas E-LOTE.
 - Solo un bloque E-V sustenta una relación entre indicadores. Si E-LOTE dice "Sin relación
   demostrable entre los indicadores", el resumen debe decirlo con esas palabras.
+- Una agrupación se sustenta solo en las señales fuertes que E-LOTE nombra (pulse compartido,
+  misma infraestructura). Compartir la entidad atribuida es contexto: nunca digas que la
+  relación existe "por" o "gracias a" la entidad. La confianza de un vínculo no es la
+  confianza de la asociación de un indicador con su entidad.
 - Nunca afirmes "misma campaña" ni "mismo actor": habla de "relación demostrable" y cita el E-V.
 - Compartir técnicas o tácticas NO prueba relación: son las documentadas en ATT&CK para la
   entidad, no comportamiento observado. Solo puedes describirlas como cobertura conjunta.
@@ -228,11 +235,18 @@ def _texto_lote(correlacion: dict) -> str:
     cobertura, conclusion = correlacion["cobertura"], correlacion["conclusion"]
     descartados = f" ({cobertura['descartados']} entrada(s) descartada(s) en la ingesta)" if cobertura["descartados"] else ""
     partes = [f"Lote de {cobertura['validos']} indicador(es) válido(s){descartados}", f"Conclusión de NEXO: {conclusion['texto']}"]
-    partes += [
-        f"Agrupación {a['id']} = {', '.join(a['indicadores'])} (vínculos {', '.join('E-' + v for v in a['vinculos'])}; "
-        f"confianza {a['confianza']}; {len(a['tecnicas_comunes'])} técnicas comunes)"
-        for a in correlacion["agrupaciones"]
-    ]
+    vinculos = {v["id"]: v for v in correlacion["vinculos"]}
+    for a in correlacion["agrupaciones"]:
+        senales = [s for vid in a["vinculos"] for s in vinculos[vid]["senales"]]
+        # Por tipo y no por vínculo: con 20 indicadores puede haber 190 vínculos.
+        fuertes = Counter(s["tipo"] for s in senales if s["fuerza"] == "fuerte")
+        partes.append(
+            f"Agrupación {a['id']} = {', '.join(a['indicadores'])} (vínculos {', '.join('E-' + v for v in a['vinculos'])}; "
+            f"confianza del vínculo {a['confianza']}; {len(a['tecnicas_comunes'])} técnicas comunes). La sustentan solo "
+            "sus señales fuertes: " + ", ".join(f"{_SENAL_FUERTE[t]} ({n} vínculo(s))" for t, n in fuertes.items())
+        )
+        if any(s["tipo"] == "misma_entidad" for s in senales):
+            partes.append(f"En {a['id']}, compartir la entidad atribuida es solo contexto: no sustenta la agrupación")
     no_participan = [f"{i['ref']} ({_NO_PARTICIPA[i['estado']]})" for i in correlacion["indicadores"] if i["estado"] != "participa"]
     if no_participan:
         partes.append("No participan en vínculos: " + ", ".join(no_participan))
@@ -263,7 +277,7 @@ def _texto_vinculo(v: dict) -> str:
         if s["tipo"] == "pulse_compartido":  # solo ids: el nombre del pulse es texto libre de terceros
             senales.append(f"{s['detalle']} (ids: {', '.join(p['id'] for p in s['pulses'])})")
         elif s["tipo"] == "misma_entidad":
-            senales.append(f"{s['detalle']}; compartir entidad no prueba la misma campaña")
+            senales.append(f"{s['detalle']} (contexto: no sustenta la relación ni prueba la misma campaña)")
         else:
             senales.append(s["detalle"])
     return f"Vínculo {v['a']}–{v['b']}, confianza {v['confianza']}. Señales: " + "; ".join(senales) + "."

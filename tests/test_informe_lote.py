@@ -91,6 +91,11 @@ def test_informe_con_relacion_demostrable(client, monkeypatch, llm):
     [prompt] = llm["prompts"]
     assert all(f"[{b}]" in prompt for b in ("E-LOTE", "E-I1", "E-I2", "E-V1"))
     assert {b["id"] for b in ia["contexto"]} >= {"E-LOTE", "E-I1", "E-I2", "E-V1", "T9001"}
+    # La agrupación se explica por sus señales fuertes; la entidad común es solo contexto.
+    datos = prompt.split("<datos>", 1)[1]
+    assert "La sustentan solo sus señales fuertes: pulse compartido de AlienVault OTX (1 vínculo(s))" in datos
+    assert "En A1, compartir la entidad atribuida es solo contexto: no sustenta la agrupación" in datos
+    assert "existe \"por\" o \"gracias a\" la entidad" in prompt
     # El nombre del pulse es texto libre de terceros: ni al prompt ni al informe.
     assert "Nombre libre del autor" not in prompt and "Nombre libre del autor" not in contenido
     assert "Resumen del lote." in contenido and "*Redactado por IA: prueba · m" in contenido

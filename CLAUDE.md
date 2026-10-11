@@ -140,8 +140,11 @@ lote (`generate_batch_analysis`), con los mismos cortes que el informe
 individual (sin entidad o sin texto de ATT&CK → no se llama) y la misma
 validación y depuración (`_redactar`): bloques `E-LOTE`, `E-I#`, `E-V#` (hasta
 `MAX_VINCULOS_CONTEXTO`) y `T####` (hasta `MAX_TECNICAS_LOTE`, primero las
-documentadas para varias entidades; sin embeddings). El nombre de un pulse
-nunca entra al prompt ni al Markdown. `POST /batch-reports/{id}/validate`
+documentadas para varias entidades; sin embeddings). `E-LOTE` nombra las
+señales fuertes que sustentan cada agrupación y marca la entidad común como
+contexto: sin eso, el modelo atribuía la relación a la entidad (medido en
+`docs/evolucion/fase-07c1-prompt-lote.md`). El nombre de un pulse nunca entra
+al prompt ni al Markdown. `POST /batch-reports/{id}/validate`
 guarda cada decisión como fila nueva (`batch_validation`).
 
 Eliminación: `DELETE /indicators/{id}` borra en cascada, en una transacción
