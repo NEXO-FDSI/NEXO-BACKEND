@@ -112,6 +112,25 @@ pegó, en orden. Ingesta y consulta (`GET /batches/{id}`, que reutiliza
 (`MAX_INDICADORES_LOTE`); `tests/test_lotes.py` lo mide. El lote no
 enriquece ni correlaciona: cada miembro sigue el flujo por indicador.
 
+Correlación entre los indicadores de un lote (`app/correlation/lote.py`,
+lógica pura, calculada al vuelo en `GET /batches/{id}` → `correlacion`):
+- Solo participan los miembros con entidad resuelta (un benigno nunca
+  resuelve); el resto aparece con su estado y no genera vínculos.
+- Señales de un par: pulse enfocado de OTX compartido (fuerte; mismo filtro
+  `MAX_INDICADORES_PULSE`), misma infraestructura (fuerte: una URL o un
+  subdominio sobre un dominio/IP que también está en el lote; dos URL en el
+  mismo host no se vinculan solas) y misma entidad (contextual).
+- **Compartir técnicas o tácticas nunca es señal** (son las documentadas
+  para la entidad, no comportamiento observado): solo van a
+  `cadena_ataque`, marcadas con `varias_entidades`.
+- Confianza del par: `alta` con señales fuertes de 2+ orígenes, `media` con
+  uno, `baja` con solo la misma entidad (no suma: suele salir de los mismos
+  pulses). Las agrupaciones son componentes conexos de vínculos
+  alta/media y valen lo que su vínculo más débil. Sin agrupaciones, la
+  conclusión empieza con "Sin relación demostrable entre los indicadores."
+- Severidad y confianza de cada miembro salen de `severity.py::evaluar`, la
+  misma función que usa `/report`.
+
 Eliminación: `DELETE /indicators/{id}` borra en cascada, en una transacción
 y desde la aplicación (las FK no tienen `ON DELETE CASCADE`):
 `human_validation` → `reports` → `indicator_entity_link` →

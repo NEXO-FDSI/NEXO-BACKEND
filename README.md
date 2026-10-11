@@ -517,7 +517,13 @@ curl -X POST http://localhost:8000/batches \
 }
 ```
 
-Between 2 and 20 items. Each item is normalized and validated like `POST /indicators`, one by one: an invalid item is recorded with its `motivo` and **does not abort the batch**, an already registered value is reused (no 409), and two entries with the same canonical value are one indicator. New indicators get `fuente` = `Lote #<id>`. The batch does not enrich or correlate: each member still follows the per-indicator pipeline. `GET /batches/{id}` returns the items in order (including discarded ones and members deleted later) and each member's investigation, with the same shape as `GET /indicators/{id}`.
+Between 2 and 20 items. Each item is normalized and validated like `POST /indicators`, one by one: an invalid item is recorded with its `motivo` and **does not abort the batch**, an already registered value is reused (no 409), and two entries with the same canonical value are one indicator. New indicators get `fuente` = `Lote #<id>`. The batch does not enrich or correlate: each member still follows the per-indicator pipeline. `GET /batches/{id}` returns the items in order (including discarded ones and members deleted later), each member's investigation (same shape as `GET /indicators/{id}`) and `correlacion`, computed on the fly from what is already stored (no writes, no network):
+
+- **Only members with a resolved entity take part.** Benign, unresolved or unprocessed members are listed with their state (`sin_entidad`, `sin_correlacionar`, `sin_enriquecer`) and never create links.
+- **Signals between two indicators:** a focused OTX pulse that lists both (strong; aggregated dumps over 1,000 indicators never count), the same infrastructure — a URL or subdomain on a domain/IP that is itself in the batch (strong) — and the same attributed entity (contextual).
+- **Sharing ATT&CK techniques or tactics is never a signal**: they are documented for the entity, not observed behaviour. They only appear in `cadena_ataque`, the joint coverage by tactic, with overlaps flagged.
+- **Pair confidence:** `alta` with strong signals from 2+ distinct origins, `media` with one, `baja` with only the same entity (it usually comes from the same pulses, so it is not counted twice). Links `alta`/`media` form `agrupaciones`.
+- With no groups the conclusion reads **"Sin relación demostrable entre los indicadores."** — a valid result, not an error.
 
 ## Testing
 

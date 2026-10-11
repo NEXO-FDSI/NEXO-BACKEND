@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.correlation import get_attck_index
 from app.correlation.attck_loader import AttckIndex
+from app.correlation.lote import correlacionar_lote
 from app.db.database import get_db
 from app.db.models import Batch, BatchItem, Indicator
 from app.ingestion.lote import registrar_lote, validar_items
@@ -101,11 +102,17 @@ def list_batches(limit: int = Query(default=50, ge=1, le=200), db: Session = Dep
 
 @router.get(
     "/batches/{batch_id}",
-    summary="Un lote con la investigación de cada indicador",
+    summary="Un lote con la investigación de cada indicador y sus vínculos",
     description=(
         "Solo lectura: el lote, sus `items` en el orden en que se pegaron (con los descartados y "
-        "los indicadores eliminados después) y la investigación de cada indicador, con la misma "
-        "forma que `GET /indicators/{id}`. **404** si el lote no existe."
+        "los indicadores eliminados después), la investigación de cada indicador (misma forma "
+        "que `GET /indicators/{id}`) y `correlacion`, calculada al vuelo y determinística: "
+        "`indicadores` (ref `I1…`, estado, entidad, severidad y confianza), `vinculos` entre "
+        "pares con sus `senales` (pulse enfocado de OTX compartido, misma infraestructura, "
+        "misma entidad), `agrupaciones`, `conclusion`, `cobertura` y `cadena_ataque` "
+        "(técnicas documentadas por táctica: compartir técnicas **no** es una señal). "
+        "Solo participan en vínculos los indicadores con entidad resuelta. **404** si el lote "
+        "no existe."
     ),
 )
 def get_batch(
@@ -123,16 +130,19 @@ def get_batch(
         .where(BatchItem.batch_id == batch_id)
         .order_by(BatchItem.posicion)
     ))
-    miembros = [ind for _, ind in filas if ind is not None]
+    items = [
+        BatchItemRead(
+            valor=ind.valor if ind else None,
+            **{k: getattr(item, k) for k in ("posicion", "entrada", "tipo", "ingesta", "indicator_id", "motivo")},
+        )
+        for item, ind in filas
+    ]
+    # Una consulta por tabla para todo el lote, no por indicador.
+    investigaciones = construir(db, [ind for _, ind in filas if ind is not None], index)
     return {
         "batch": BatchRead.model_validate(batch),
-        "items": [
-            BatchItemRead(
-                valor=ind.valor if ind else None,
-                **{k: getattr(item, k) for k in ("posicion", "entrada", "tipo", "ingesta", "indicator_id", "motivo")},
-            )
-            for item, ind in filas
-        ],
-        # Una consulta por tabla para todo el lote, no por indicador.
-        "investigaciones": construir(db, miembros, index),
+        "items": items,
+        "investigaciones": investigaciones,
+        # En memoria, sin consultas: el número de sentencias no cambia con la correlación.
+        "correlacion": correlacionar_lote([i.model_dump() for i in items], investigaciones, index),
     }

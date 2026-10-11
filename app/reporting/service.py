@@ -9,12 +9,7 @@ from app.correlation.service import correlate_indicator
 from app.db.models import Indicator, Report
 from app.db.repositories import report_repository
 from app.enrichment.service import cobertura, get_or_fetch_enrichment
-from app.reporting.severity import (
-    calcular_concordancia,
-    calcular_confianza,
-    calcular_severidad,
-    detectar_contradicciones,
-)
+from app.reporting.severity import evaluar
 from app.reporting.template import build_report_content, nivel_confianza
 
 
@@ -33,10 +28,9 @@ def generate_report(
     enriquecimiento = get_or_fetch_enrichment(db, indicator, consultar=False, cache=crudos)
     fuentes = enriquecimiento["fuentes"]
     resultado = correlate_indicator(db, indicator, enriquecimiento["detalle"], index, fuentes)
-    severidad = calcular_severidad(resultado, fuentes)
-    concordancia = calcular_concordancia(resultado, fuentes, index)
-    contradicciones = detectar_contradicciones(fuentes, concordancia)
-    confianza = calcular_confianza(resultado, fuentes, contradicciones)
+    evaluacion = evaluar(resultado, fuentes, index)
+    severidad, confianza = evaluacion["severidad"], evaluacion["confianza"]
+    concordancia, contradicciones = evaluacion["concordancia"], evaluacion["contradicciones"]
     # Nunca propaga un fallo de IA: el registro dice por qué no hubo análisis.
     ia = generate_grounded_analysis(
         indicator, resultado, vector_store, fuentes=fuentes, contradicciones=contradicciones
