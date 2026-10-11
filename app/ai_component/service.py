@@ -10,7 +10,14 @@ import logging
 import math
 
 from app.ai_component.llm_client import LLMServiceError, embed_text, generate_analysis
-from app.ai_component.prompt_builder import construir_contexto, renderizar_prompt
+from app.ai_component.prompt_builder import (
+    REGLAS,
+    REGLAS_LOTE,
+    construir_contexto,
+    construir_contexto_lote,
+    renderizar_prompt,
+    tecnicas_candidatas_lote,
+)
 from app.ai_component.schema import depurar, parsear
 from app.ai_component.vectorstore import VectorStore
 from app.db.models import Indicator
@@ -62,6 +69,38 @@ def ordenar_por_afinidad(consulta: str, technique_texts: dict[str, dict]) -> dic
     return seleccion
 
 
+def _registro() -> dict:
+    return {
+        "estado": "no_llamado", "motivo": None, "analisis": None, "descartes": [],
+        "contexto": [], "prompt": None, "proveedor": None, "modelo": None,
+        "latencia_ms": None, "tokens": None, "intentos_fallidos": [], "seleccion": None,
+    }
+
+
+def _redactar(ia: dict, contexto: dict, reglas: str, sobre: str) -> dict:
+    """Llama al LLM con el contexto, valida su JSON y descarta lo que cite fuera del contexto.
+    Nunca propaga un fallo de IA: el registro dice qué pasó."""
+    prompt = renderizar_prompt(contexto, reglas)
+    ia.update(contexto=contexto["bloques"], prompt=prompt)
+
+    try:
+        analisis, meta = generate_analysis(prompt, validar=parsear)
+    except LLMServiceError as exc:
+        # El informe se genera igual: el resto del contenido es determinístico. Pero el
+        # motivo queda en el log y en los metadatos: sin esto, un 400 era invisible.
+        logger.warning("análisis narrativo omitido para %s: %s", sobre, exc)
+        ia.update(estado="fallido", motivo=str(exc), intentos_fallidos=exc.intentos)
+        return ia
+
+    depurado, descartes = depurar(analisis, {b["id"] for b in contexto["bloques"]})
+    ia.update(meta, descartes=descartes)
+    if depurado is None:
+        ia.update(estado="descartado", motivo="todo lo que redactó el modelo citaba fuera del contexto")
+    else:
+        ia.update(estado="generado", analisis=depurado.model_dump())
+    return ia
+
+
 def generate_grounded_analysis(
     indicator: Indicator,
     correlation_result: dict,
@@ -74,11 +113,7 @@ def generate_grounded_analysis(
     `estado`: "generado" | "no_llamado" | "fallido" | "descartado"; `analisis` es el
     AnalisisIA depurado (dict) o None; `motivo` explica por qué no lo hay.
     """
-    ia = {
-        "estado": "no_llamado", "motivo": None, "analisis": None, "descartes": [],
-        "contexto": [], "prompt": None, "proveedor": None, "modelo": None,
-        "latencia_ms": None, "tokens": None, "intentos_fallidos": [], "seleccion": None,
-    }
+    ia = _registro()
     if not correlation_result["resuelto"]:
         # Corte 1: sin entidad resuelta no hay nada que explicar. Ni vector store ni LLM.
         ia["motivo"] = "sin entidad resuelta: por diseño no se consulta al modelo"
@@ -97,22 +132,24 @@ def generate_grounded_analysis(
     contexto = construir_contexto(
         indicator, correlation_result, technique_texts, fuentes, contradicciones, puntajes=seleccion["puntajes"]
     )
-    prompt = renderizar_prompt(contexto)
-    ia.update(contexto=contexto["bloques"], prompt=prompt)
+    return _redactar(ia, contexto, REGLAS, indicator.valor)
 
-    try:
-        analisis, meta = generate_analysis(prompt, validar=parsear)
-    except LLMServiceError as exc:
-        # El informe se genera igual: el resto del contenido es determinístico. Pero el
-        # motivo queda en el log y en los metadatos: sin esto, un 400 era invisible.
-        logger.warning("análisis narrativo omitido para %s: %s", indicator.valor, exc)
-        ia.update(estado="fallido", motivo=str(exc), intentos_fallidos=exc.intentos)
+
+def generate_batch_analysis(correlacion: dict, vector_store: VectorStore, sobre: str = "lote") -> dict:
+    """Registro del análisis de IA de un lote (Fase 7c), con los mismos cortes que el de un
+    indicador. El modelo solo redacta: la agrupación y la conclusión ya las decidió NEXO."""
+    ia = _registro()
+    if not any(i["estado"] == "participa" for i in correlacion["indicadores"]):
+        # Corte 1: ningún indicador resolvió entidad. Ni vector store ni LLM.
+        ia["motivo"] = "ningún indicador del lote resolvió entidad: por diseño no se consulta al modelo"
         return ia
 
-    depurado, descartes = depurar(analisis, {b["id"] for b in contexto["bloques"]})
-    ia.update(meta, descartes=descartes)
-    if depurado is None:
-        ia.update(estado="descartado", motivo="todo lo que redactó el modelo citaba fuera del contexto")
-    else:
-        ia.update(estado="generado", analisis=depurado.model_dump())
-    return ia
+    technique_texts = vector_store.get_by_ids([t["id"] for t in tecnicas_candidatas_lote(correlacion)])
+    if not technique_texts:
+        # Corte 2: igual que en el informe individual, sin texto oficial no se llama al LLM.
+        ia["motivo"] = "sin texto oficial de ATT&CK recuperado para las técnicas del lote"
+        return ia
+
+    # Sin embeddings: primero las técnicas que documentan varias entidades, luego por táctica.
+    ia["seleccion"] = {"metodo": "solapamiento_y_tactica", "consulta": None, "motivo": None, "puntajes": {}}
+    return _redactar(ia, construir_contexto_lote(correlacion, technique_texts), REGLAS_LOTE, sobre)

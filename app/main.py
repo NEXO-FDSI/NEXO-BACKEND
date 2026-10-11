@@ -35,7 +35,10 @@ trazable a MITRE ATT&CK e informes auditables para un analista SOC.
 5. `POST /reports/{id}/validate` — aceptación o rechazo por un analista.
 
 **Lotes** — `POST /batches` registra varios indicadores de una vez (un ítem inválido no aborta
-el lote; uno ya registrado se reutiliza). Cada indicador del lote sigue el flujo anterior.
+el lote; uno ya registrado se reutiliza). Cada indicador del lote sigue el flujo anterior;
+`POST /batches/{id}/report` genera el informe conjunto (vínculos con evidencia entre los
+indicadores, o "sin relación demostrable") y `POST /batch-reports/{id}/validate` registra la
+decisión del analista.
 
 Prototipo académico: sin autenticación por diseño (Seminario de Seguridad de la
 Información 2026-2, Grupo 2, Escuela Colombiana de Ingeniería Julio Garavito).

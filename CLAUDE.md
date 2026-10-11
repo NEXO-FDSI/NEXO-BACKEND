@@ -131,6 +131,19 @@ lógica pura, calculada al vuelo en `GET /batches/{id}` → `correlacion`):
 - Severidad y confianza de cada miembro salen de `severity.py::evaluar`, la
   misma función que usa `/report`.
 
+Informe conjunto (`POST /batches/{id}/report`, `app/reporting/lote.py`): una
+versión nueva en `batch_reports` a partir de lo persistido (no enriquece ni
+correlaciona); 400 si ningún miembro está enriquecido, los pendientes quedan
+como cobertura parcial. Siete secciones fijas; los valores van como `código`
+para que remark-gfm no los convierta en enlaces. Una sola llamada al LLM por
+lote (`generate_batch_analysis`), con los mismos cortes que el informe
+individual (sin entidad o sin texto de ATT&CK → no se llama) y la misma
+validación y depuración (`_redactar`): bloques `E-LOTE`, `E-I#`, `E-V#` (hasta
+`MAX_VINCULOS_CONTEXTO`) y `T####` (hasta `MAX_TECNICAS_LOTE`, primero las
+documentadas para varias entidades; sin embeddings). El nombre de un pulse
+nunca entra al prompt ni al Markdown. `POST /batch-reports/{id}/validate`
+guarda cada decisión como fila nueva (`batch_validation`).
+
 Eliminación: `DELETE /indicators/{id}` borra en cascada, en una transacción
 y desde la aplicación (las FK no tienen `ON DELETE CASCADE`):
 `human_validation` → `reports` → `indicator_entity_link` →

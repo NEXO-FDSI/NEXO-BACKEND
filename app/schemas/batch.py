@@ -1,13 +1,15 @@
+import json
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # ponytail: perilla. Con más indicadores conviene procesar el lote en segundo plano en el
 # backend (plan de la Fase 7, §2.2): el cupo de VirusTotal y el contexto del LLM no escalan.
 MAX_INDICADORES_LOTE = 20
 
 Ingesta = Literal["creado", "existente", "duplicado", "invalido", "eliminado"]
+Conclusion = Literal["relacion_demostrable", "sin_relacion_demostrable"]
 
 
 class ItemLote(BaseModel):
@@ -47,6 +49,41 @@ class BatchCreated(BaseModel):
     resumen: dict[str, int]  # creados, existentes, duplicados, invalidos
 
 
+class BatchReportRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    batch_id: int
+    contenido: str  # Markdown
+    conclusion: Conclusion
+    metadatos: dict | None = None
+    timestamp: datetime
+
+    @field_validator("metadatos", mode="before")
+    @classmethod
+    def _desde_json(cls, v):
+        # En la BD es Text con JSON; hacia la API sale como objeto (igual que ReportRead).
+        return json.loads(v) if isinstance(v, str) else v
+
+
+class BatchValidationRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    batch_report_id: int
+    decision: str  # aceptado / rechazado
+    analista: str | None
+    timestamp: datetime
+
+
+class UltimoInforme(BaseModel):
+    id: int
+    conclusion: Conclusion
+    timestamp: datetime
+
+
 class BatchSummary(BatchRead):
     indicadores: int  # ítems con indicador
     descartados: int  # inválidos y duplicados
+    ultimo_informe: UltimoInforme | None
+    decision: str | None  # la vigente del último informe; None = pendiente o sin informe
