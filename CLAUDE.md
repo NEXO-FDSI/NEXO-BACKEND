@@ -74,7 +74,7 @@ Tres capas:
 Flujo del pipeline, un endpoint por paso (cada uno exige el anterior):
 
 1. `POST /indicators` — el `model_validator` de `IndicatorCreate` primero
-   normaliza (refang, canonización) y luego valida el valor ya canónico
+   normaliza (refang sin distinguir mayúsculas, canonización) y luego valida el valor ya canónico
    (formato inválido → 422); duplicado → 409 por la restricción única.
 2. `POST /indicators/{id}/enrich` — consulta en paralelo las fuentes de
    `app/enrichment/providers/` (OTX, ThreatFox, VirusTotal) y guarda cada
@@ -100,12 +100,63 @@ Flujo del pipeline, un endpoint por paso (cada uno exige el anterior):
 5. `POST /reports/{id}/validate` — validación humana; cada decisión es
    una fila nueva (historial auditable).
 
+Lotes (Fase 7, plan en `docs/evolucion/fase-07-campanas-plan.md`): un
+**lote** (`batches`) es un conjunto de indicadores que define el analista;
+no es una *Campaign* de ATT&CK (esas son `entities.tipo = campaña`).
+`POST /batches` (`app/ingestion/lote.py`) valida cada ítem con
+`IndicatorCreate`: uno inválido queda `invalido` con su `motivo` sin abortar
+el lote, uno ya registrado se reutiliza (`existente`, sin 409) y dos con el
+mismo valor canónico son un `duplicado`. `batch_items` guarda todo lo que se
+pegó, en orden. Ingesta y consulta (`GET /batches/{id}`, que reutiliza
+`construir`) ejecutan las mismas sentencias con 2 o con 20 indicadores
+(`MAX_INDICADORES_LOTE`); `tests/test_lotes.py` lo mide. El lote no
+enriquece ni correlaciona: cada miembro sigue el flujo por indicador.
+
+Correlación entre los indicadores de un lote (`app/correlation/lote.py`,
+lógica pura, calculada al vuelo en `GET /batches/{id}` → `correlacion`):
+- Solo participan los miembros con entidad resuelta (un benigno nunca
+  resuelve); el resto aparece con su estado y no genera vínculos.
+- Señales de un par: pulse enfocado de OTX compartido (fuerte; mismo filtro
+  `MAX_INDICADORES_PULSE`), misma infraestructura (fuerte: una URL o un
+  subdominio sobre un dominio/IP que también está en el lote; dos URL en el
+  mismo host no se vinculan solas) y misma entidad (contextual).
+- **Compartir técnicas o tácticas nunca es señal** (son las documentadas
+  para la entidad, no comportamiento observado): solo van a
+  `cadena_ataque`, marcadas con `varias_entidades`.
+- Confianza del par: `alta` con señales fuertes de 2+ orígenes, `media` con
+  uno, `baja` con solo la misma entidad (no suma: suele salir de los mismos
+  pulses). Las agrupaciones son componentes conexos de vínculos
+  alta/media y valen lo que su vínculo más débil. Sin agrupaciones, la
+  conclusión empieza con "Sin relación demostrable entre los indicadores."
+- Severidad y confianza de cada miembro salen de `severity.py::evaluar`, la
+  misma función que usa `/report`.
+
+Informe conjunto (`POST /batches/{id}/report`, `app/reporting/lote.py`): una
+versión nueva en `batch_reports` a partir de lo persistido (no enriquece ni
+correlaciona); 400 si ningún miembro está enriquecido, los pendientes quedan
+como cobertura parcial. Siete secciones fijas; los valores van como `código`
+para que remark-gfm no los convierta en enlaces. Una sola llamada al LLM por
+lote (`generate_batch_analysis`), con los mismos cortes que el informe
+individual (sin entidad o sin texto de ATT&CK → no se llama) y la misma
+validación y depuración (`_redactar`): bloques `E-LOTE`, `E-I#`, `E-V#` (hasta
+`MAX_VINCULOS_CONTEXTO`) y `T####` (hasta `MAX_TECNICAS_LOTE`, primero las
+documentadas para varias entidades; sin embeddings). `E-LOTE` nombra las
+señales fuertes que sustentan cada agrupación y marca la entidad común como
+contexto: sin eso, el modelo atribuía la relación a la entidad (medido en
+`docs/evolucion/fase-07c1-prompt-lote.md`). El nombre de un pulse nunca entra
+al prompt ni al Markdown. `POST /batch-reports/{id}/validate`
+guarda cada decisión como fila nueva (`batch_validation`).
+
 Eliminación: `DELETE /indicators/{id}` borra en cascada, en una transacción
 y desde la aplicación (las FK no tienen `ON DELETE CASCADE`):
 `human_validation` → `reports` → `indicator_entity_link` →
 `enrichment_cache` → `indicators`, y luego las entidades que quedan
 huérfanas con sus `entity_technique_link`. El catálogo `techniques` nunca
-se toca. Devuelve filas borradas por tabla y deja un WARNING en el log.
+se toca. En los lotes, el ítem no se borra: queda `eliminado` con
+`indicator_id` NULL. Devuelve filas afectadas por tabla y deja un WARNING
+en el log. `DELETE /batches/{id}` (`repositories/batch.py`) hace lo mismo con
+un lote: `batch_validation` → `batch_reports` → `batch_items` → `batches`;
+**nunca** borra sus indicadores (son investigaciones propias).
 
 Consultas de solo lectura (no escriben ni salen a la red): `GET /indicators`
 (recientes, o búsqueda por `tipo` + `valor` normalizado),

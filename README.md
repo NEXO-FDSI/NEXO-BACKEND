@@ -168,6 +168,10 @@ erDiagram
     techniques ||--o{ entity_technique_link : "stage (b)"
     indicators ||--o{ reports : "generates"
     reports    ||--o{ human_validation : "is validated by"
+    batches    ||--o{ batch_items : "keeps what the analyst pasted"
+    indicators |o--o{ batch_items : "member of"
+    batches    ||--o{ batch_reports : "joint report (one row per version)"
+    batch_reports ||--o{ batch_validation : "is validated by"
 
     indicators {
         int id PK
@@ -220,7 +224,39 @@ erDiagram
         string analista
         timestamptz timestamp
     }
+    batches {
+        int id PK
+        string nombre
+        timestamptz timestamp
+    }
+    batch_items {
+        int id PK
+        int batch_id FK
+        int indicator_id FK "NULL if invalid, duplicate or deleted"
+        int posicion
+        string entrada "as pasted"
+        string tipo
+        string ingesta "creado / existente / duplicado / invalido / eliminado"
+        text motivo
+    }
+    batch_reports {
+        int id PK
+        int batch_id FK
+        text contenido "Markdown"
+        string conclusion "relacion_demostrable / sin_relacion_demostrable"
+        text metadatos "JSON: frozen correlation, discarded items, AI record"
+        timestamptz timestamp
+    }
+    batch_validation {
+        int id PK
+        int batch_report_id FK
+        string decision "aceptado / rechazado"
+        string analista
+        timestamptz timestamp
+    }
 ```
+
+A **batch** (`batches`) is a set of indicators defined by the analyst. It is not an ATT&CK *Campaign*: those are entities (`entities.tipo = campaña`).
 
 Column names are in Spanish because they are the actual database columns. The schema is managed only by Alembic (`alembic/versions/`), never with `create_all()`. The one exception is the ephemeral test database.
 
@@ -339,6 +375,12 @@ Every error response is JSON with a `detail` field.
 | POST | `/indicators/{id}/correlate` | Correlation | `/enrich` | 200 | 400 not enriched · 404 |
 | POST | `/indicators/{id}/report` | Reports | `/enrich` | 201 | 400 not enriched · 404 |
 | POST | `/reports/{id}/validate` | Reports | report | 201 | 404 · 422 invalid decision |
+| POST | `/batches` | Batches | — | 201 | 409 concurrent registration · 422 no valid item or over the limits |
+| GET | `/batches` | Batches | — | 200 | — |
+| GET | `/batches/{id}` | Batches | batch | 200 | 404 |
+| POST | `/batches/{id}/report` | Batches | one member enriched | 201 | 400 nothing enriched · 404 |
+| POST | `/batch-reports/{id}/validate` | Batches | batch report | 201 | 404 · 422 invalid decision |
+| DELETE | `/batches/{id}` | Batches | batch | 200 | 404 |
 | GET | `/health` | Health | — | 200 | — |
 
 The examples below are real responses for a WannaCry sample (scenario 1 of the test dataset), with the LLM running locally.
@@ -469,6 +511,47 @@ curl -X POST http://localhost:8000/reports/1/validate \
 ```
 
 `decision` is `aceptado` or `rechazado`. `analista` is optional. Each call adds a row, so the history of decisions is preserved.
+
+### `POST /batches` — register a batch of indicators
+
+```bash
+curl -X POST http://localhost:8000/batches \
+  -H 'Content-Type: application/json' \
+  -d '{"nombre": "SolarWinds triage", "indicadores": [
+        {"tipo": "hash", "valor": "2c4a910a1299cdae2a4e55988a2f102e"},
+        {"tipo": "domain", "valor": "ervsystem[.]com"},
+        {"tipo": "domain", "valor": "ERVSYSTEM.COM"},
+        {"tipo": null, "valor": "not-an-ioc"}]}'
+```
+
+```json
+{
+  "batch": {"id": 7, "nombre": "SolarWinds triage", "timestamp": "2026-10-10T14:02:11Z"},
+  "items": [
+    {"posicion": 1, "entrada": "2c4a910a1299cdae2a4e55988a2f102e", "tipo": "hash", "ingesta": "existente", "indicator_id": 14, "valor": "2c4a910a1299cdae2a4e55988a2f102e", "motivo": null},
+    {"posicion": 2, "entrada": "ervsystem[.]com", "tipo": "domain", "ingesta": "creado", "indicator_id": 31, "valor": "ervsystem.com", "motivo": null},
+    {"posicion": 3, "entrada": "ERVSYSTEM.COM", "tipo": "domain", "ingesta": "duplicado", "indicator_id": null, "valor": null, "motivo": "mismo valor canónico que la posición 2"},
+    {"posicion": 4, "entrada": "not-an-ioc", "tipo": null, "ingesta": "invalido", "indicator_id": null, "valor": null, "motivo": "tipo no reconocido"}
+  ],
+  "resumen": {"creados": 1, "existentes": 1, "duplicados": 1, "invalidos": 1}
+}
+```
+
+Between 2 and 20 items. Each item is normalized and validated like `POST /indicators`, one by one: an invalid item is recorded with its `motivo` and **does not abort the batch**, an already registered value is reused (no 409), and two entries with the same canonical value are one indicator. New indicators get `fuente` = `Lote #<id>`. The batch does not enrich or correlate: each member still follows the per-indicator pipeline. `GET /batches/{id}` returns the items in order (including discarded ones and members deleted later), each member's investigation (same shape as `GET /indicators/{id}`) and `correlacion`, computed on the fly from what is already stored (no writes, no network):
+
+- **Only members with a resolved entity take part.** Benign, unresolved or unprocessed members are listed with their state (`sin_entidad`, `sin_correlacionar`, `sin_enriquecer`) and never create links.
+- **Signals between two indicators:** a focused OTX pulse that lists both (strong; aggregated dumps over 1,000 indicators never count), the same infrastructure — a URL or subdomain on a domain/IP that is itself in the batch (strong) — and the same attributed entity (contextual).
+- **Sharing ATT&CK techniques or tactics is never a signal**: they are documented for the entity, not observed behaviour. They only appear in `cadena_ataque`, the joint coverage by tactic, with overlaps flagged.
+- **Pair confidence:** `alta` with strong signals from 2+ distinct origins, `media` with one, `baja` with only the same entity (it usually comes from the same pulses, so it is not counted twice). Links `alta`/`media` form `agrupaciones`.
+- With no groups the conclusion reads **"Sin relación demostrable entre los indicadores."** — a valid result, not an error.
+
+### `POST /batches/{id}/report` — joint report
+
+Each call stores a new version (`batch_reports`), built only from what is already persisted: it does not enrich or correlate any indicator. The Markdown has seven sections — conclusion, indicators, links with their signal and source, joint ATT&CK coverage by tactic (shared techniques are flagged as *not* proving a link), members that do not take part and why, source coverage and limits, and the AI analysis. Indicator values are written as inline code so the UI never turns them into clickable links. Members still pending do not block the report: they are declared as partial coverage. `metadatos` freezes the correlation shown by `GET /batches/{id}`, the discarded items and the AI record.
+
+The LLM is called **once per batch** and only writes: it receives `E-LOTE` (NEXO's conclusion and coverage), one `E-I#` per processed indicator, up to 10 `E-V#` links and up to 6 official ATT&CK techniques (those documented for several entities first), and its output goes through the same validation and citation pruning as the per-indicator report. Pulse names never reach the prompt. It is not called if no member resolved an entity, and if it fails the report is generated anyway. `POST /batch-reports/{id}/validate` takes `{"decision": "aceptado" | "rechazado"}`; each decision is a new row, and `GET /batches` shows the latest report and its current decision.
+
+`DELETE /batches/{id}` removes the batch irreversibly, in one transaction: its report validations, every report version, the pasted entries and the batch. **Its indicators are not deleted**: they are investigations of their own and may belong to other batches. The response counts deleted rows per table and the server logs a WARNING.
 
 ## Testing
 

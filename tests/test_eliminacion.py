@@ -1,10 +1,14 @@
-"""DELETE /indicators/{id}: eliminación en cascada de todo lo que cuelga del indicador."""
+"""DELETE /indicators/{id} y DELETE /batches/{id}: eliminación en cascada de lo que cuelga de cada uno."""
 
 import json
 
 import pytest
 
 from app.db.models import (
+    Batch,
+    BatchItem,
+    BatchReport,
+    BatchValidation,
     EnrichmentCache,
     Entity,
     EntityTechniqueLink,
@@ -63,7 +67,7 @@ def test_borra_en_cascada_todo_lo_del_indicador(client, db, pipeline):
         "valor": "40.0.0.1",
         "eliminados": {
             "human_validation": 2, "reports": 2, "indicator_entity_link": 1, "enrichment_cache": 1,
-            "indicators": 1, "entity_technique_link": 2, "entities": 1,
+            "batch_items": 0, "indicators": 1, "entity_technique_link": 2, "entities": 1,
         },
     }
     assert db.get(Indicator, ind_id) is None
@@ -98,6 +102,19 @@ def test_indicador_solo_registrado(client, db):
     assert eliminados["indicators"] == 1 and sum(eliminados.values()) == 1
 
 
+def test_en_un_lote_el_item_queda_eliminado_y_no_se_borra(client, db):
+    lote = client.post("/batches", json={"indicadores": [
+        {"tipo": "ip", "valor": "44.0.0.1"}, {"tipo": "ip", "valor": "44.0.0.2"}]}).json()
+    borrado, conservado = (i["indicator_id"] for i in lote["items"])
+
+    assert client.delete(f"/indicators/{borrado}").json()["eliminados"]["batch_items"] == 1
+    # Lo que pegó el analista sigue en el lote, sin indicador; el otro miembro queda intacto.
+    items = client.get(f"/batches/{lote['batch']['id']}").json()["items"]
+    assert [(i["entrada"], i["ingesta"], i["indicator_id"]) for i in items] == [
+        ("44.0.0.1", "eliminado", None), ("44.0.0.2", "creado", conservado)]
+    assert _cuenta(db, BatchItem, batch_id=lote["batch"]["id"]) == 2
+
+
 def test_el_valor_se_puede_volver_a_registrar(client):
     ind_id = client.post("/indicators", json={"tipo": "ip", "valor": "42.0.0.1"}).json()["id"]
     assert client.post("/indicators", json={"tipo": "ip", "valor": "42.0.0.1"}).status_code == 409
@@ -118,3 +135,70 @@ def test_queda_constancia_en_el_log(client, caplog):
     with caplog.at_level(logging.WARNING, logger="app.api.indicators"):
         client.delete(f"/indicators/{ind_id}")
     assert f"indicador #{ind_id} (43.0.0.1) eliminado en cascada" in caplog.text
+
+
+# --- Lotes ---
+
+
+@pytest.fixture
+def lote(client, monkeypatch):
+    """Lote de dos IPs y una entrada inválida, enriquecido, correlacionado, con informes y decisiones."""
+    monkeypatch.setattr(OTX_MOCK, lambda tipo, v, key: _otx("Emotet"))
+
+    def crear(*valores, informes=2, decisiones=("aceptado", "rechazado")):
+        r = client.post("/batches", json={"nombre": "Para borrar", "indicadores": [
+            *({"tipo": "ip", "valor": v} for v in valores), {"tipo": None, "valor": "basura"}]})
+        cuerpo = r.json()
+        for item in cuerpo["items"]:
+            if item["indicator_id"]:
+                client.post(f"/indicators/{item['indicator_id']}/enrich")
+                client.post(f"/indicators/{item['indicator_id']}/correlate")
+        for _ in range(informes):
+            informe = client.post(f"/batches/{cuerpo['batch']['id']}/report").json()
+        for decision in decisiones if informes else ():
+            client.post(f"/batch-reports/{informe['id']}/validate", json={"decision": decision})
+        return cuerpo["batch"]["id"], [i["indicator_id"] for i in cuerpo["items"] if i["indicator_id"]]
+
+    return crear
+
+
+def test_borra_el_lote_con_sus_informes_sin_tocar_los_indicadores(client, db, lote):
+    lote_id, miembros = lote("45.0.1.1", "45.0.1.2")
+    otro_id, _ = lote("45.0.1.1", "45.0.1.3", informes=0)  # comparte 45.0.1.1
+
+    r = client.delete(f"/batches/{lote_id}")
+    assert r.status_code == 200
+    assert r.json() == {
+        "batch_id": lote_id,
+        "nombre": "Para borrar",
+        "eliminados": {"batch_validation": 2, "batch_reports": 2, "batch_items": 3, "batches": 1},
+    }
+    assert db.get(Batch, lote_id) is None
+    assert _cuenta(db, BatchItem, batch_id=lote_id) == _cuenta(db, BatchReport, batch_id=lote_id) == 0
+    assert db.query(BatchValidation).count() == 0
+    assert client.get(f"/batches/{lote_id}").status_code == 404
+    # Los indicadores siguen siendo investigaciones completas, y el otro lote queda intacto.
+    for ind_id in miembros:
+        cuerpo = client.get(f"/indicators/{ind_id}").json()
+        assert cuerpo["correlation"]["entity"]["nombre"] == "emotet"
+    assert [i["ingesta"] for i in client.get(f"/batches/{otro_id}").json()["items"]] == ["existente", "creado", "invalido"]
+
+
+def test_lote_sin_informes(client, lote):
+    lote_id, _ = lote("45.0.2.1", "45.0.2.2", informes=0)
+    eliminados = client.delete(f"/batches/{lote_id}").json()["eliminados"]
+    assert eliminados == {"batch_validation": 0, "batch_reports": 0, "batch_items": 3, "batches": 1}
+
+
+def test_lote_inexistente_al_eliminar_es_404(client):
+    r = client.delete("/batches/999999")
+    assert r.status_code == 404 and r.json() == {"detail": "Lote no encontrado"}
+
+
+def test_eliminar_un_lote_deja_constancia_en_el_log(client, lote, caplog):
+    import logging
+
+    lote_id, _ = lote("45.0.3.1", "45.0.3.2", informes=0)
+    with caplog.at_level(logging.WARNING, logger="app.api.batches"):
+        client.delete(f"/batches/{lote_id}")
+    assert f"lote #{lote_id} (Para borrar) eliminado en cascada" in caplog.text

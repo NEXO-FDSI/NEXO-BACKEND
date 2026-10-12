@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.ai_component.vectorstore import ChromaVectorStore
-from app.api import correlation, enrichment, indicators, investigations, reports
+from app.api import batches, correlation, enrichment, indicators, investigations, reports
 from app.enrichment.providers import PROVEEDORES
 from app.correlation.attck_loader import load_attck_index
 from app.core.config import settings
@@ -34,6 +34,12 @@ trazable a MITRE ATT&CK e informes auditables para un analista SOC.
 4. `POST /indicators/{id}/report` — informe con análisis narrativo grounded (LLM + RAG).
 5. `POST /reports/{id}/validate` — aceptación o rechazo por un analista.
 
+**Lotes** — `POST /batches` registra varios indicadores de una vez (un ítem inválido no aborta
+el lote; uno ya registrado se reutiliza). Cada indicador del lote sigue el flujo anterior;
+`POST /batches/{id}/report` genera el informe conjunto (vínculos con evidencia entre los
+indicadores, o "sin relación demostrable") y `POST /batch-reports/{id}/validate` registra la
+decisión del analista.
+
 Prototipo académico: sin autenticación por diseño (Seminario de Seguridad de la
 Información 2026-2, Grupo 2, Escuela Colombiana de Ingeniería Julio Garavito).
 """
@@ -44,6 +50,7 @@ TAGS = [
     {"name": "Correlation", "description": "Cadena de dos etapas contra MITRE ATT&CK."},
     {"name": "Reports", "description": "Informe del indicador y validación humana."},
     {"name": "Investigations", "description": "Todas las investigaciones de la plataforma, paginadas."},
+    {"name": "Batches", "description": "Lotes de indicadores definidos por el analista. No son campañas de ATT&CK."},
     {"name": "Health", "description": "Estado del servicio."},
 ]
 
@@ -103,6 +110,7 @@ app.include_router(enrichment.router)
 app.include_router(correlation.router)
 app.include_router(reports.router)
 app.include_router(investigations.router)
+app.include_router(batches.router)
 
 
 @app.get("/health", tags=["Health"], summary="Estado del servicio")

@@ -6,24 +6,29 @@ app.ingestion.validators, que corre después.
 """
 
 import ipaddress
+import re
 from urllib.parse import urlsplit, urlunsplit
 
 # Símbolos primero, esquemas al final: así "hxxp[:]//evil[.]com" forma el "://" antes de
 # que se reemplace "hxxp://". Con el orden inverso ese caso quedaría en "hxxp://evil.com".
-_REFANG = (
-    ("[.]", "."),
-    ("(.)", "."),
-    ("[dot]", "."),
-    ("[:]", ":"),
-    ("hxxps://", "https://"),
-    ("hxxp://", "http://"),
+# Sin distinguir mayúsculas: un bloque pegado de un informe trae "HXXP://" o "[DOT]".
+_REFANG = tuple(
+    (re.compile(re.escape(ofuscado), re.IGNORECASE), limpio)
+    for ofuscado, limpio in (
+        ("[.]", "."),
+        ("(.)", "."),
+        ("[dot]", "."),
+        ("[:]", ":"),
+        ("hxxps://", "https://"),
+        ("hxxp://", "http://"),
+    )
 )
 
 
 def refang(valor: str) -> str:
     """Deshace las ofuscaciones típicas de threat intel."""
     for ofuscado, limpio in _REFANG:
-        valor = valor.replace(ofuscado, limpio)
+        valor = ofuscado.sub(limpio, valor)
     return valor
 
 

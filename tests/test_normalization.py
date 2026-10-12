@@ -17,6 +17,10 @@ CASOS = [
     ("domain", "ejemplo(.)com", "ejemplo.com"),
     ("domain", "ejemplo[dot]com", "ejemplo.com"),
     ("domain", "ejemplo[.]com", "ejemplo.com"),
+    # refang sin distinguir mayúsculas: así llegan los bloques pegados de informes (Fase 7a)
+    ("url", "HXXPS://EVIL[.]EXAMPLE/x", "https://evil.example/x"),
+    ("url", "Hxxp[:]//evil(.)com", "http://evil.com"),
+    ("domain", "evil[DOT]example", "evil.example"),
     # mayúsculas
     ("domain", "EXAMPLE.COM", "example.com"),
     ("hash", "D41D8CD98F00B204E9800998ECF8427E", "d41d8cd98f00b204e9800998ecf8427e"),

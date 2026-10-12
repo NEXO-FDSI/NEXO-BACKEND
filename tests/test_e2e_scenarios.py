@@ -151,6 +151,64 @@ def test_escenario_4_misma_campana(client, monkeypatch, ia):
     assert set.intersection(*(_tecnicas(r) for r in resultados))
 
 
+def _informe_conjunto(client, monkeypatch, casos: list[dict]) -> dict:
+    """Fase 7: los indicadores como un lote (enrich + correlate por indicador) y su informe conjunto."""
+    respuestas = {c["indicator"]["valor"]: c["enrichment_response"] for c in casos}
+    monkeypatch.setattr("app.enrichment.client.fetch_reputation", lambda tipo, valor, key: respuestas[valor])
+    r = client.post("/batches", json={"indicadores": [c["indicator"] for c in casos]})
+    assert r.status_code == 201, r.text
+    for item in r.json()["items"]:
+        for paso in ("enrich", "correlate"):
+            assert client.post(f"/indicators/{item['indicator_id']}/{paso}").status_code == 200
+    informe = client.post(f"/batches/{r.json()['batch']['id']}/report")
+    assert informe.status_code == 201, informe.text
+    return informe.json()
+
+
+def test_escenario_3_informe_conjunto_por_tactica(client, monkeypatch, ia):
+    """Antes 'Parcial': cada indicador se correlacionaba bien, pero no había informe conjunto."""
+    esc = ESCENARIOS["scenario_3_multiples_tecnicas"]
+    informe = _informe_conjunto(client, monkeypatch, esc["indicators"])
+
+    contenido, correlacion = informe["contenido"], informe["metadatos"]["correlacion"]
+    # Amenazas distintas: el informe lo dice, aunque las entidades compartan técnicas.
+    assert informe["conclusion"] == "sin_relacion_demostrable"
+    assert "> **Sin relación demostrable entre los indicadores.**" in contenido
+    assert correlacion["vinculos"] == []
+    # Hallazgos agrupados por fase de la cadena de ataque, en orden ATT&CK.
+    tacticas = [g["tactica"] for g in correlacion["cadena_ataque"]]
+    assert len(tacticas) >= esc["expected"]["min_tacticas"]
+    assert all(f"### {t}" in contenido for t in tacticas)
+    assert contenido.index("### Reconnaissance") < contenido.index("### Initial Access") < contenido.index("### Impact")
+    for caso in esc["indicators"]:
+        assert f"| {caso['expected']['entidad']} (" in contenido
+    # Una sola llamada al LLM para todo el lote, con los bloques del lote.
+    datos = ia[0].split("<datos>", 1)[1]  # las reglas mencionan [E-V1] como ejemplo
+    assert len(ia) == 1 and "[E-LOTE]" in datos and "[E-I3]" in datos and "[E-V" not in datos
+
+
+def test_escenario_4_agrupa_la_misma_campana(client, monkeypatch, ia):
+    """Antes 'Parcial': no había agrupación explícita ni informe con las técnicas comunes."""
+    esc = ESCENARIOS["scenario_4_misma_campana"]
+    informe = _informe_conjunto(client, monkeypatch, esc["indicators"])
+
+    contenido, correlacion = informe["contenido"], informe["metadatos"]["correlacion"]
+    assert informe["conclusion"] == "relacion_demostrable"
+    [agrupacion] = correlacion["agrupaciones"]
+    assert agrupacion["indicadores"] == ["I1", "I2"]
+    # La relación se apoya en reportes compartidos, no en técnicas compartidas...
+    [vinculo] = correlacion["vinculos"]
+    assert [s["tipo"] for s in vinculo["senales"]] == ["pulse_compartido", "misma_entidad"]
+    assert "**Pulse compartido** (AlienVault OTX): 4 pulse(s) enfocado(s)" in contenido
+    # ...y el informe trae las técnicas comunes del grupo, sin llamarlo "misma campaña".
+    tecnicas = len(SUBSET["entity_techniques"][esc["expected"]["entidad"]])
+    assert agrupacion["tecnicas_comunes"] == sorted(SUBSET["entity_techniques"][esc["expected"]["entidad"]])
+    assert f"**Técnicas comunes en A1:** {tecnicas}." in contenido
+    assert "lo que no prueba que pertenezcan a la misma campaña" in contenido
+    [prompt] = ia
+    assert "[E-V1]" in prompt.split("<datos>", 1)[1]
+
+
 def test_escenario_5_indicador_benigno(client, monkeypatch, vector_store):
     esc = ESCENARIOS["scenario_5_indicador_benigno"]
     [r] = _pipeline(client, monkeypatch, [esc])

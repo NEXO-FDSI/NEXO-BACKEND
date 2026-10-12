@@ -148,6 +148,19 @@ def detectar_contradicciones(fuentes: list[dict], concordancia: list[dict]) -> l
     return salida
 
 
+def evaluar(correlacion: dict, fuentes: list[dict], index: AttckIndex) -> dict:
+    """Lo que /report calcula de un indicador, en un solo lugar: el informe individual y el
+    lote (Fase 7) lo reutilizan tal cual, así nunca discrepan."""
+    concordancia = calcular_concordancia(correlacion, fuentes, index)
+    contradicciones = detectar_contradicciones(fuentes, concordancia)
+    return {
+        "severidad": calcular_severidad(correlacion, fuentes),
+        "concordancia": concordancia,
+        "contradicciones": contradicciones,
+        "confianza": calcular_confianza(correlacion, fuentes, contradicciones),
+    }
+
+
 def calcular_confianza(correlacion: dict, fuentes: list[dict], contradicciones: list[dict]) -> dict:
     """{nivel, motivos}. Primera regla que aplica (documentada en el informe de la fase):
 
