@@ -1,0 +1,56 @@
+[ 1/37] malicioso 91dbd86deb59740c8f358574 → andromeda  (esperada: andromeda; 0.0 s)
+[ 2/37] malicioso f8e31b338123e38757f8b709 → asyncrat  (esperada: asyncrat; 0.0 s)
+[ 3/37] malicioso 99271bebcac0da7f3aad7c4e → attor  (esperada: attor; 0.0 s)
+[ 4/37] malicioso be3236730bd792ce698f9335 → sin asociación  (esperada: bandook; 0.0 s)
+[ 5/37] malicioso bcdf0ddf98e3aa7d5c67063b → metamorfo  (esperada: metamorfo; 0.0 s)
+[ 6/37] malicioso ee0678e58868ebd6603cc2e0 → macma  (esperada: macma; 0.0 s)
+[ 7/37] malicioso 4ec3c90846af6b79ee1a5188 → dynowiper  (esperada: dynowiper; 0.0 s)
+[ 8/37] malicioso 8a85c1399a0e404c8285a723 → embargo  (esperada: embargo; 0.0 s)
+[ 9/37] malicioso cecc5bba6193d744837e689e → emotet  (esperada: emotet; 0.0 s)
+[10/37] malicioso 00b701e3ef29912c1fcd8c21 → gelsemium  (esperada: gelsemium; 0.0 s)
+[11/37] malicioso fb32344292ab36080f2d0402 → grandoreiro  (esperada: grandoreiro; 0.0 s)
+[12/37] malicioso 2b448233e6c9c4594e385e79 → gravityrat  (esperada: gravityrat; 0.0 s)
+[13/37] malicioso 305e634a85df6146c76935ad → sin asociación  (esperada: greyenergy; 0.0 s)
+[14/37] malicioso 45c58bc40768dce6a6c611e0 → astaroth  (esperada: astaroth; 0.0 s)
+[15/37] malicioso 37d54e3d5e8b838f366b9c20 → industroyer  (esperada: industroyer; 0.0 s)
+[16/37] malicioso 6d3a12cd4b7cc987aeeb5a9b → gamaredon group  (esperada: invisimole; 0.0 s)
+[17/37] malicioso 6d812c1572f89da2c8deeea0 → sin asociación  (esperada: kasidet; 0.0 s)
+[18/37] malicioso 5d68d761026f6c5354a70c20 → keydnap  (esperada: keydnap; 0.0 s)
+[19/37] malicioso 9ed33b43e679ad98615e1a4e → kobalos  (esperada: kobalos; 0.0 s)
+[20/37] malicioso 6f94cfaabb19491f2b8e719d → lumma stealer  (esperada: lumma stealer; 0.0 s)
+[21/37] malicioso a9badcbf3bd5c22eeb6faf7d → mispadu  (esperada: mispadu; 0.0 s)
+[22/37] malicioso 0c341c6bcbadc4663f87b4d7 → sin asociación  (esperada: ramsay; 0.0 s)
+[23/37] malicioso 97e13515263002809505dc91 → systembc  (esperada: ransomhub; 0.0 s)
+[24/37] benigno   8.8.8.8                  → sin asociación  (esperada: —; 0.0 s)
+[25/37] benigno   1.1.1.1                  → sin asociación  (esperada: —; 0.0 s)
+[26/37] benigno   9.9.9.9                  → sin asociación  (esperada: —; 0.0 s)
+[27/37] benigno   208.67.222.222           → qakbot  (esperada: —; 0.0 s)
+[28/37] benigno   google.com               → sin asociación  (esperada: —; 0.0 s)
+[29/37] benigno   microsoft.com            → sin asociación  (esperada: —; 0.0 s)
+[30/37] benigno   github.com               → shai-hulud  (esperada: —; 0.0 s)
+[31/37] benigno   wikipedia.org            → sin asociación  (esperada: —; 0.0 s)
+[32/37] benigno   cloudflare.com           → cobalt strike  (esperada: —; 0.0 s)
+[33/37] benigno   apple.com                → sin asociación  (esperada: —; 0.0 s)
+[34/37] benigno   16cbe40fb24ce2d422afddb5 → connectwise  (esperada: —; 0.0 s)
+[35/37] benigno   50479953865b30775056441b → sliver  (esperada: —; 0.0 s)
+[36/37] benigno   fdddbf4581e046b8102815d5 → sin asociación  (esperada: —; 0.0 s)
+[37/37] benigno   d6429513d63a6fba90428d65 → sin asociación  (esperada: —; 0.0 s)
+
+Maliciosos: 23  ·  Benignos: 14
+
+  ✅ deteccion                      0.8696   (umbral >= 0.8)
+  ✅ precision_atribucion           0.8947   (umbral >= 0.7)
+  ✅ exhaustividad_atribucion       0.7391   (umbral >= 0.5)
+  ✅ f1_tecnicas                     0.702   (umbral >= 0.6)
+  ❌ tasa_falsos_positivos          0.3571   (umbral <= 0.1)
+  — tiempo_mediana_s                 None   (umbral <= 30.0)
+  — tiempo_p95_s                     None   (umbral <= 60.0)
+  ✅ supera_baseline              0.8947 vs 0.4667
+
+  atribución: 17/19 correctas de 23; baseline 7/15
+  técnicas VP/FP/FN: [483, 259, 151]  P=0.6509 R=0.7618
+  benignos con evidencia: 10; con entidad: 5 (baseline 5)
+  mediana con LLM: None s; confianza del informe en los falsos positivos: [None, None, None, None, None]
+  acuerdo humano: None sobre 0 validados
+
+Resultados: eval/resultados/2026-10-12T235028Z-repeticion.json
