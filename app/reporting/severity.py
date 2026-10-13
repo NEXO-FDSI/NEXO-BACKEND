@@ -165,8 +165,9 @@ def calcular_confianza(correlacion: dict, fuentes: list[dict], contradicciones: 
     """{nivel, motivos}. Primera regla que aplica (documentada en el informe de la fase):
 
     sin_evidencia  ninguna fuente que respondió lo encontró (se dice si es completo o parcial)
-    baja           hay contradicciones, o la evidencia es débil: sin entidad y una sola fuente,
-                   o entidad inferida solo de etiquetas
+    baja           una fuente avala su legitimidad (correlación con `motivo`), hay
+                   contradicciones, o la evidencia es débil: sin entidad y una sola
+                   fuente, o entidad inferida solo de etiquetas
     alta           entidad respaldada por 2 o más fuentes, sin contradicciones
     media          el resto: una fuente con familia de malware, o varias fuentes sin entidad común
     """
@@ -189,7 +190,10 @@ def calcular_confianza(correlacion: dict, fuentes: list[dict], contradicciones: 
     entidad = (correlacion.get("entity") or {}).get("nombre")
     respaldo = [etiqueta.get(f, f) for f in correlacion.get("fuentes") or []] if resuelto else []
 
-    if contradicciones:
+    if not resuelto and correlacion.get("motivo"):
+        # Una fuente avala su legitimidad (motivo_legitimidad): el reporte de las otras es débil.
+        nivel, motivos = "baja", [correlacion["motivo"], *(c["detalle"] for c in contradicciones)]
+    elif contradicciones:
         nivel, motivos = "baja", [c["detalle"] for c in contradicciones]
     elif not resuelto and len(con_evidencia) == 1:
         nivel, motivos = "baja", [f"solo {con_evidencia[0]} lo reporta y no hay entidad ATT&CK atribuible"]

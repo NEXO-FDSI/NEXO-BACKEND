@@ -11,6 +11,7 @@ from app.correlation.attck_loader import AttckIndex
 from app.correlation.service import (
     MAX_INDICADORES_PULSE,
     correlate_indicator,
+    motivo_legitimidad,
     resolve_entity_from_enrichment,
     retrieve_techniques_for_entity,
 )
@@ -58,7 +59,7 @@ def test_sin_evidencia_la_etapa_b_nunca_se_invoca(db, attck_index):
 
     assert mock.call_count == 0, "la etapa (b) se ejecutó sin entidad resuelta"
     assert resultado == {"resuelto": False, "entity": None, "confianza": None,
-                         "evidencia": None, "fuentes": [], "tecnicas": []}
+                         "evidencia": None, "fuentes": [], "tecnicas": [], "motivo": None}
     assert len(entity_repository.list(db)) == antes_ent
     assert len(indicator_entity_link_repository.list(db)) == antes_link
 
@@ -253,3 +254,45 @@ def test_endpoint_400_sin_enriquecimiento_previo(client, db):
 
 def test_endpoint_404(client):
     assert client.post("/indicators/999999/correlate").status_code == 404
+
+
+# --- Fase 8b: corte por legitimidad ---
+
+
+def _vt(maliciosos, total=70, estado="con_evidencia"):
+    veredicto = "malicioso" if maliciosos >= 5 else "sospechoso" if maliciosos else "sin_evidencia"
+    return {"fuente": "virustotal", "estado": estado, "resumen": {
+        "veredicto": veredicto, "familias": [], "etiquetas": [],
+        "detecciones": {"maliciosos": maliciosos, "sospechosos": 0, "total": total}}}
+
+
+@pytest.mark.parametrize("tipo, detalle, fuentes, corta", [
+    # lista blanca de OTX: corta aunque haya pulses enfocados con familia (cloudflare.com)
+    ("domain", {**_detalle(familias=["Emotet"]), "validation": [{"source": "whitelist"}]}, [], True),
+    ("ip", {"validation": [{"source": "false_positive"}]}, [], True),
+    ("domain", {"validation": [{"source": "alexa"}]}, [], False),  # popularidad sola no basta
+    # hash analizado por VirusTotal por debajo de "malicioso" (putty.exe: 1/70)
+    ("hash", _detalle(familias=["Emotet"]), [_vt(1)], True),
+    ("hash", _detalle(familias=["Emotet"]), [_vt(0, estado="sin_evidencia")], True),
+    ("hash", _detalle(familias=["Emotet"]), [_vt(55)], False),
+    ("hash", _detalle(familias=["Emotet"]), [_vt(0, total=0, estado="sin_evidencia")], False),  # VT no lo conoce
+    ("hash", _detalle(familias=["Emotet"]), [{**_vt(0), "estado": "error", "resumen": None}], False),
+    # para IP/dominio, 0 detecciones en VirusTotal es débil: no corta
+    ("domain", _detalle(familias=["Emotet"]), [_vt(0, estado="sin_evidencia")], False),
+])
+def test_motivo_legitimidad(tipo, detalle, fuentes, corta):
+    assert (motivo_legitimidad(tipo, detalle, fuentes) is not None) is corta
+
+
+def test_legitimo_corta_la_cadena_y_borra_el_link_de_una_correlacion_anterior(db, attck_index):
+    ind = _indicador(db)
+    detalle = _detalle(familias=["Emotet"])
+    assert correlate_indicator(db, ind, detalle, attck_index)["resuelto"] is True
+    assert len(indicator_entity_link_repository.list(db)) == 1
+
+    with patch(RETRIEVE) as mock:
+        r = correlate_indicator(db, ind, {**detalle, "validation": [{"source": "whitelist"}]}, attck_index)
+
+    assert mock.call_count == 0
+    assert r["resuelto"] is False and r["motivo"].startswith("OTX lo lista como legítimo")
+    assert indicator_entity_link_repository.list(db) == []

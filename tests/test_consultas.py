@@ -107,7 +107,17 @@ def test_sin_entidad_la_correlacion_es_sin_asociacion_aunque_no_se_haya_pedido(c
                                             "respuesta_json": json.dumps(_otx())})
     corr = client.get(f"/indicators/{ind.id}").json()["correlation"]
     assert corr == {"indicator_id": ind.id, "resuelto": False, "entity": None, "confianza": None,
-                    "evidencia": None, "fuentes": [], "tecnicas": []}
+                    "evidencia": None, "fuentes": [], "tecnicas": [], "motivo": None}
+
+
+def test_lista_blanca_corta_tambien_en_la_consulta(client, db):
+    """Sin /correlate, GET deduce lo mismo que daría: lista blanca de OTX → sin asociación."""
+    ind = indicator_repository.create(db, {"tipo": "domain", "valor": "legitimo.example"})
+    otx = {**_otx("Emotet"), "validation": [{"source": "whitelist"}]}
+    enrichment_cache_repository.create(db, {"indicator_id": ind.id, "fuente_api": FUENTE,
+                                            "respuesta_json": json.dumps(otx)})
+    corr = client.get(f"/indicators/{ind.id}").json()["correlation"]
+    assert corr["resuelto"] is False and corr["motivo"].startswith("OTX lo lista como legítimo (whitelist)")
 
 
 def test_con_entidad_pero_sin_correlate_la_correlacion_no_se_inventa(client, db):

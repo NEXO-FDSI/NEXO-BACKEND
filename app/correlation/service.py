@@ -15,7 +15,7 @@ from app.db.models import EntityTechniqueLink, Indicator, Technique
 from app.db.repositories import entity_repository, indicator_entity_link_repository
 from app.db.repositories.entity import get_by_nombre
 from app.db.repositories.entity_technique_link import technique_ids_enlazadas
-from app.db.repositories.indicator_entity_link import get_by_indicator_and_entity
+from app.db.repositories.indicator_entity_link import delete_by_indicator, get_by_indicator_and_entity
 from app.db.repositories.technique import ids_existentes
 
 FUENTE_ATTCK = "MITRE ATT&CK STIX dataset — relationship 'uses'"
@@ -26,6 +26,8 @@ CONFIANZA_TAGS = 0.6  # señal ruidosa
 # 3 y 378 indicadores; los volcados que secuestraban la atribución (un hash de WannaCry
 # atribuido a Cobalt Strike con 0.9) tenían de 1.062 a más de un millón.
 MAX_INDICADORES_PULSE = 1000
+# `validation[].source` de OTX que marcan un indicador como legítimo (8.8.8.8, github.com...).
+LISTAS_BLANCAS_OTX = {"whitelist", "false_positive"}
 
 
 def _candidatos(detalle: dict) -> tuple[list[list[str]], list[list[str]], int]:
@@ -168,11 +170,38 @@ def _persistir_tecnicas(db: Session, entity_id: int, ids: list[str], index: Attc
     db.flush()
 
 
-def _sin_asociacion() -> dict:
+def _sin_asociacion(motivo: str | None = None) -> dict:
     return {
         "resuelto": False, "entity": None, "confianza": None, "evidencia": None,
-        "fuentes": [], "tecnicas": [],
+        "fuentes": [], "tecnicas": [], "motivo": motivo,
     }
+
+
+def motivo_legitimidad(tipo: str, detalle: dict, fuentes: list[dict] = ()) -> str | None:
+    """Por qué la etapa (a) no debe atribuir aunque haya evidencia, o None.
+
+    Una fuente que avala la legitimidad pesa más que otra que lo reporta: infraestructura y
+    herramientas legítimas aparecen en pulses y en ThreatFox porque el malware las usa o las
+    suplanta (Fase 8: cloudflare.com → Cobalt Strike, putty.exe → ConnectWise).
+    - OTX lo tiene en lista blanca (`validation`), haya o no pulses.
+    - Hash que VirusTotal analizó y no llega a "malicioso" (< UMBRAL_MALICIOSO motores). Solo
+      hashes: para una IP o un dominio, 0 detecciones es débil (los C2 nuevos suelen tenerlo).
+    """
+    listas = sorted({
+        v["source"] for v in detalle.get("validation") or []
+        if isinstance(v, dict) and v.get("source") in LISTAS_BLANCAS_OTX
+    })
+    if listas:
+        return f"OTX lo lista como legítimo ({', '.join(listas)}): no se atribuye aunque otras fuentes lo reporten"
+    if tipo == "hash":
+        for f in fuentes:
+            resumen = f.get("resumen") or {}
+            detecciones = resumen.get("detecciones") or {}
+            if (f["fuente"] == "virustotal" and f["estado"] in ("con_evidencia", "sin_evidencia")
+                    and detecciones.get("total") and resumen.get("veredicto") != "malicioso"):
+                return (f"VirusTotal: {detecciones.get('maliciosos') or 0} de {detecciones['total']} "
+                        "motores lo detectan como malicioso: no se atribuye")
+    return None
 
 
 def _tecnicas_de(nombre: str, index: AttckIndex, procedencia: list[str], fuentes: list[dict]) -> list[dict]:
@@ -190,7 +219,9 @@ def _tecnicas_de(nombre: str, index: AttckIndex, procedencia: list[str], fuentes
     ]
 
 
-def correlation_from_link(link, detalle: dict, index: AttckIndex, fuentes: list[dict] = ()) -> dict | None:
+def correlation_from_link(
+    link, detalle: dict, index: AttckIndex, fuentes: list[dict] = (), tipo: str | None = None
+) -> dict | None:
     """Lo que devolvió (o devolvería) /correlate, SIN escribir nada: para reconstruir una
     investigación con GET. None si la correlación aún no se ejecutó.
 
@@ -202,6 +233,8 @@ def correlation_from_link(link, detalle: dict, index: AttckIndex, fuentes: list[
     """
     fuentes = list(fuentes)
     if link is None:
+        if motivo := motivo_legitimidad(tipo, detalle, fuentes):
+            return _sin_asociacion(motivo)
         return _sin_asociacion() if resolve_entity_from_enrichment(detalle, index, fuentes) is None else None
     entity = link.entity
     procedencia = procedencia_de(entity.nombre, detalle, index, fuentes)
@@ -212,6 +245,7 @@ def correlation_from_link(link, detalle: dict, index: AttckIndex, fuentes: list[
         "evidencia": link.evidencia,
         "fuentes": procedencia,
         "tecnicas": _tecnicas_de(entity.nombre, index, procedencia, fuentes),
+        "motivo": None,
     }
 
 
@@ -220,11 +254,14 @@ def correlate_indicator(
 ) -> dict:
     """detalle: respuesta cruda de OTX ({} si no la hay); fuentes: entradas de /enrich."""
     fuentes = list(fuentes)
-    resuelto = resolve_entity_from_enrichment(detalle, index, fuentes)
+    motivo = motivo_legitimidad(indicator.tipo, detalle, fuentes)
+    resuelto = None if motivo else resolve_entity_from_enrichment(detalle, index, fuentes)
 
     if resuelto is None:
-        # Corte de la cadena. Nada debajo de esta línea se ejecuta.
-        return _sin_asociacion()
+        # Corte de la cadena. Nada debajo de esta línea se ejecuta. Un link de una correlación
+        # anterior (reglas viejas) dejaría la investigación atribuida: se borra.
+        delete_by_indicator(db, indicator.id)
+        return _sin_asociacion(motivo)
 
     nombre = resuelto["nombre_canonico"]
 
@@ -253,4 +290,5 @@ def correlate_indicator(
         "evidencia": resuelto["evidencia"],
         "fuentes": resuelto["fuentes"],
         "tecnicas": tecnicas,
+        "motivo": None,
     }

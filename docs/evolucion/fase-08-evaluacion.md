@@ -69,6 +69,10 @@ y el LLM real (Groq `qwen/qwen3.8-27b`, respaldo Ollama `qwen3:8b`). Evidencia:
 
 **Se cumplen 7 de 8 umbrales. No se cumple el de falsos positivos.**
 
+> Actualización: la Fase 8b (`fase-08b-falsos-positivos.md`) agrega un corte por legitimidad.
+> Con él, los falsos positivos bajan a 0/14 en esta muestra y a 1/16 en un conjunto nuevo de
+> validación. Los números de esta página son los de antes del cambio.
+
 ### Detalle
 
 - **Aciertos (17):** andromeda, asyncrat, attor, metamorfo, macma, dynowiper, embargo, emotet,

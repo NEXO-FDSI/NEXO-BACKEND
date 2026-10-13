@@ -219,6 +219,7 @@ def main() -> int:
     ap.add_argument("--api", default="http://localhost:8000")
     ap.add_argument("--dataset", default=str(RAIZ / "dataset.csv"))
     ap.add_argument("--informe", action="store_true", help="genera el informe (LLM) y mide el tiempo total")
+    ap.add_argument("--etiqueta", help="sufijo del archivo de resultados (por defecto vivo/repeticion)")
     ap.add_argument("--pausa", type=float, default=0, help="segundos entre indicadores (cupo de VirusTotal/Groq)")
     args = ap.parse_args()
 
@@ -246,7 +247,7 @@ def main() -> int:
     if errores:
         print(f"\n  ⚠ {len(errores)} indicadores con error (excluidos de las métricas)")
 
-    modo = "vivo" if args.informe else "repeticion"
+    modo = args.etiqueta or ("vivo" if args.informe else "repeticion")
     salida = RAIZ / "resultados" / f"{datetime.now(timezone.utc):%Y-%m-%dT%H%M%SZ}-{modo}.json"
     salida.parent.mkdir(exist_ok=True)
     salida.write_text(json.dumps({

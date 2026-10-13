@@ -91,7 +91,7 @@ def construir(db: Session, indicators: list[Indicator], index: AttckIndex) -> li
             detalle = resultado["detalle"]
             resultado["detalle"] = recortar_otx(detalle)
             enrichment = {"indicator_id": ind.id, "fuente": FUENTE, **resultado}
-            snapshot = correlation_from_link(links.get(ind.id), detalle, index, resultado["fuentes"])
+            snapshot = correlation_from_link(links.get(ind.id), detalle, index, resultado["fuentes"], ind.tipo)
             correlation = {"indicator_id": ind.id, **snapshot} if snapshot else None
         snapshots.append({
             "indicator": IndicatorRead.model_validate(ind),

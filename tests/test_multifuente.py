@@ -103,9 +103,10 @@ def llm():
     # El fixture `client` restaura los overrides al terminar.
 
 
-def _pipeline(client, db):
-    """enrich → correlate → report sobre un hash nuevo. Devuelve las tres respuestas."""
-    ind = indicator_repository.create(db, {"tipo": "hash", "valor": HASH})
+def _pipeline(client, db, tipo="hash", valor=HASH):
+    """enrich → correlate → report sobre un indicador nuevo (un hash por defecto). Devuelve
+    las tres respuestas."""
+    ind = indicator_repository.create(db, {"tipo": tipo, "valor": valor})
     enrich = client.post(f"/indicators/{ind.id}/enrich")
     assert enrich.status_code == 200, enrich.text
     corr = client.post(f"/indicators/{ind.id}/correlate")
@@ -170,9 +171,11 @@ def test_tres_fuentes_coincidentes_dan_procedencia_multiple_y_confianza_alta(cli
 
 
 def test_vt_sin_detecciones_contradice_a_otx(client, db, fuentes, llm):
+    # Un dominio: para IP/dominio, 0 detecciones en VirusTotal no corta la atribución.
     fuentes.otx, fuentes.vt = OTX_EMOTET, VT_LIMPIO
-    _, corr, rep = _pipeline(client, db)
+    _, corr, rep = _pipeline(client, db, "domain", "emotet-c2.example")
 
+    assert corr["entity"]["nombre"] == "emotet"
     meta = rep["metadatos"]
     [c] = meta["contradicciones"]
     assert c["tipo"] == "vt_limpio" and c["fuentes"] == ["virustotal", "alienvault_otx"]
@@ -195,9 +198,30 @@ def test_familia_que_apunta_a_otra_entidad_es_contradiccion(client, db, fuentes,
 
 def test_lista_blanca_de_otx_contradice_a_otra_fuente(client, db, fuentes, llm):
     fuentes.otx, fuentes.tf = OTX_LISTA_BLANCA, TF_EMOTET
-    _, _, rep = _pipeline(client, db)
+    _, corr, rep = _pipeline(client, db)
     meta = rep["metadatos"]
     assert [c["tipo"] for c in meta["contradicciones"]] == ["lista_blanca"]
+    # La lista blanca además corta la atribución que ThreatFox habría dado (Fase 8b).
+    assert corr["resuelto"] is False and corr["motivo"].startswith("OTX lo lista como legítimo")
+    assert meta["confianza"]["nivel"] == "baja" and meta["confianza"]["motivos"][0] == corr["motivo"]
+    assert llm == []  # sin entidad no se llama al LLM
+
+
+def test_hash_limpio_en_virustotal_no_se_atribuye_aunque_otx_lo_reporte(client, db, fuentes, llm):
+    """Fase 8b: putty.exe salía atribuido a ConnectWise por etiquetas de OTX."""
+    fuentes.otx, fuentes.vt = OTX_EMOTET, _vt(1)
+    _, corr, rep = _pipeline(client, db)
+
+    assert corr["resuelto"] is False and corr["tecnicas"] == []
+    assert corr["motivo"] == "VirusTotal: 1 de 70 motores lo detectan como malicioso: no se atribuye"
+    assert rep["metadatos"]["confianza"]["nivel"] == "baja"
+    assert llm == []
+
+
+def test_hash_malicioso_en_virustotal_se_atribuye_igual(client, db, fuentes, llm):
+    fuentes.otx, fuentes.vt = OTX_EMOTET, VT_GEODO
+    _, corr, _ = _pipeline(client, db)
+    assert corr["entity"]["nombre"] == "emotet" and corr["motivo"] is None
 
 
 # --- 5: una fuente falla y otra tiene evidencia ---

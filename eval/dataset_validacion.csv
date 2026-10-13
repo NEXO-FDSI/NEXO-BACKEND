@@ -1,0 +1,31 @@
+tipo,valor,clase,familia,alias,fuente
+domain,cooperatvassquaidmew.xyz,malicioso,lumma stealer,lummastealer|lumma,https://github.com/eset/malware-ioc/blob/705ead5a0a86fefae3c2390f91a339852384f438/lummastealer/README.adoc
+ip,172.67.134.100,malicioso,lumma stealer,lummastealer|lumma,https://github.com/eset/malware-ioc/blob/705ead5a0a86fefae3c2390f91a339852384f438/lummastealer/README.adoc
+domain,jdklibraries.com,malicioso,gravityrat,,https://github.com/eset/malware-ioc/blob/705ead5a0a86fefae3c2390f91a339852384f438/gravityrat/README.adoc
+ip,75.2.37.224,malicioso,gravityrat,,https://github.com/eset/malware-ioc/blob/705ead5a0a86fefae3c2390f91a339852384f438/gravityrat/README.adoc
+domain,www.zvatrswtsrw.ml,malicioso,astaroth,guildma,https://github.com/eset/malware-ioc/blob/705ead5a0a86fefae3c2390f91a339852384f438/guildma/README.adoc
+domain,r2.panjo.club,malicioso,bandook,,https://github.com/eset/malware-ioc/blob/705ead5a0a86fefae3c2390f91a339852384f438/bandook/README.adoc
+ip,20.237.166.161,malicioso,grandoreiro,,https://github.com/eset/malware-ioc/blob/705ead5a0a86fefae3c2390f91a339852384f438/grandoreiro/README.adoc
+ip,31.172.71.5,malicioso,dynowiper,,https://github.com/eset/malware-ioc/blob/705ead5a0a86fefae3c2390f91a339852384f438/dynowiper/README.adoc
+ip,130.185.75.198,malicioso,ransomhub,,https://github.com/eset/malware-ioc/blob/705ead5a0a86fefae3c2390f91a339852384f438/ransomhub/README.adoc
+domain,processplanet.org,malicioso,muddywater,,https://github.com/eset/malware-ioc/blob/705ead5a0a86fefae3c2390f91a339852384f438/muddywater/README.adoc
+domain,upespr.com,malicioso,mustang panda,,https://github.com/eset/malware-ioc/blob/705ead5a0a86fefae3c2390f91a339852384f438/mustang_panda/README.adoc
+domain,nododru.ru,malicioso,gamaredon group,gamaredon,https://github.com/eset/malware-ioc/blob/705ead5a0a86fefae3c2390f91a339852384f438/gamaredon/README.adoc
+domain,adstore.twilightparadox.com,malicioso,turla,,https://github.com/eset/malware-ioc/blob/705ead5a0a86fefae3c2390f91a339852384f438/turla/README.adoc
+domain,recsecas.com,malicioso,winter vivern,,https://github.com/eset/malware-ioc/blob/705ead5a0a86fefae3c2390f91a339852384f438/winter_vivern/README.adoc
+domain,discord.com,benigno,,,https://discord.com
+domain,pastebin.com,benigno,,,https://pastebin.com
+domain,dropbox.com,benigno,,,https://dropbox.com
+domain,raw.githubusercontent.com,benigno,,,https://github.com
+domain,drive.google.com,benigno,,,https://drive.google.com
+domain,anydesk.com,benigno,,,https://anydesk.com
+domain,teamviewer.com,benigno,,,https://teamviewer.com
+domain,zoom.us,benigno,,,https://zoom.us
+ip,4.2.2.2,benigno,,,https://www.lumen.com
+ip,149.112.112.112,benigno,,,https://quad9.net/
+ip,94.140.14.14,benigno,,,https://adguard-dns.io/
+hash,267d8be2912e897cd1cebe6dbde73c1e0ceb9bd865fd17817dd9debed6151de1,benigno,,,https://the.earth.li/~sgtatham/putty/0.83/sha256sums
+hash,b7d3b317e623948a735e01a495be16df20badeab62d7bf3cf1ba61367a92da86,benigno,,,https://the.earth.li/~sgtatham/putty/0.83/sha256sums
+hash,9742689a50e96ddc04d80ceff046b28da2beefd617be18166f8c5e715ec60c59,benigno,,,https://get.videolan.org/vlc/3.0.21/win64/vlc-3.0.21-win64.exe.sha256
+hash,c6d1e5aacbf69aa18df4caf1346fd69638491a5ad0085729bae91c662d1c62bb,benigno,,,https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.8.5/npp.8.8.5.checksums.sha256
+hash,52188f917b378f00c70ec136bcf090005f30d44fbc4eba0bce759cc6592d60f6,benigno,,,https://github.com/git-for-windows/git/releases/latest

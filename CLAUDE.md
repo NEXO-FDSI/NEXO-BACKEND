@@ -195,6 +195,12 @@ Reglas de la etapa (a), en `app/correlation/service.py`:
   distintas; desempate por más votos (pulses), luego orden de aparición.
 - Los IDs ATT&CK que trae una fuente (OTX `attack_ids`) solo corroboran
   técnicas de la entidad (`reportada_por`); nunca agregan técnicas.
+- **Corte por legitimidad** (`motivo_legitimidad`, Fase 8b): no se atribuye
+  si OTX tiene el indicador en lista blanca (`validation`: whitelist o
+  false_positive, haya o no pulses), ni si es un hash que VirusTotal analizó
+  y no llega a "malicioso" (< `UMBRAL_MALICIOSO`). La correlación devuelve
+  `motivo`, la confianza del informe es `baja` y re-correlacionar borra el
+  link anterior. Medido en `docs/evolucion/fase-08b-falsos-positivos.md`.
 
 La razón (hallazgo de la Etapa 9 con datos reales de OTX): un solo volcado
 agregado atribuía un hash de WannaCry a Cobalt Strike con 0.9.

@@ -3,13 +3,12 @@
 from urllib.parse import quote
 
 from app.core.config import settings
-from app.correlation.service import MAX_INDICADORES_PULSE
+from app.correlation.service import LISTAS_BLANCAS_OTX, MAX_INDICADORES_PULSE
 from app.enrichment import client  # el módulo, no el símbolo: así el patch de los tests aplica
 from app.enrichment.providers.base import resumen, tecnicas, unicos, urls
 
 # Sección de la página web de OTX (distinta de la sección de la API).
 _PAGINA = {"ip": "ip", "domain": "domain", "hash": "file", "url": "url"}
-_LISTAS_BLANCAS = {"whitelist", "false_positive"}
 
 
 class OTX:
@@ -46,7 +45,7 @@ class OTX:
             for f in p.get("malware_families") or []
         )
         en_lista_blanca = any(
-            isinstance(v, dict) and v.get("source") in _LISTAS_BLANCAS
+            isinstance(v, dict) and v.get("source") in LISTAS_BLANCAS_OTX
             for v in crudo.get("validation") or []
         )
         if enfocados <= 0 and en_lista_blanca:
